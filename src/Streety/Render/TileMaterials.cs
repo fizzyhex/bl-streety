@@ -7,21 +7,17 @@ namespace Streety.Render;
 /// </summary>
 /// <remarks>
 /// the streety level can provide it: a renderer on a GameObject named <see cref="TemplateObjectName"/>, whose
-/// material is cloned per tile and whose layer the tiles use. google's imagery has lighting baked in, so an
-/// unlit material looks right.
+/// material is cloned per tile and whose layer the tiles use. otherwise tiles are lit with litmas so they take
+/// realtime lighting and shadows; the meshes carry normals for it (see GlbReader).
 /// </remarks>
 public static class TileMaterials
 {
     public const string TemplateObjectName = "StreetyTileMaterial";
 
-    private const string SlzUnlit = "SLZ/SLZ Unlit";
     private const string LitMas = "SLZ/LitMAS/LitMAS Standard";
 
-    // both slz shaders ship with the game. legacy Unlit/Texture is in the build too but draws nothing under
-    // bonelab's urp fork.
     private static readonly string[] FallbackShaders =
     {
-        SlzUnlit,
         LitMas,
         "Universal Render Pipeline/Lit",
     };
@@ -55,10 +51,10 @@ public static class TileMaterials
 
             var material = new Material(shader) { name = "streety tile" };
 
-            if (name == SlzUnlit)
-                material.SetColor("_BaseColor", Color.white);
-            else if (name == LitMas)
-                MakeEmissive(material);
+            material.SetColor("_BaseColor", Color.white);
+
+            if (name == LitMas)
+                SetUpLitMas(material);
 
             return (material, 0);
         }
@@ -67,8 +63,8 @@ public static class TileMaterials
     }
 
     /// <summary>
-    /// Shader.Find only sees always-included shaders; slz unlit lives in the game's bundles, so also look through
-    /// shaders that are already loaded (the rig and ui use it).
+    /// Shader.Find only sees always-included shaders; litmas lives in the game's bundles, so also look through
+    /// shaders that are already loaded.
     /// </summary>
     private static Shader FindShader(string name)
     {
@@ -87,15 +83,12 @@ public static class TileMaterials
     }
 
     /// <summary>
-    /// litmas has no unlit mode; a black albedo with the imagery as emission keeps the baked lighting as-is.
-    /// the renderer assigns each tile's texture to _EmissionMap alongside _BaseMap.
+    /// plain rough dielectric: the imagery is the albedo, no emission, no normal map.
     /// </summary>
-    private static void MakeEmissive(Material material)
+    private static void SetUpLitMas(Material material)
     {
-        material.SetColor("_BaseColor", Color.black);
-        material.SetFloat("_Emission", 1f);
-        material.SetColor("_EmissionColor", Color.white);
-        material.SetFloat("_BakedMutiplier", 0f);
+        material.SetFloat("_Emission", 0f);
+        material.SetFloat("_Normals", 0f);
         material.EnableKeyword("_NO_SSR");
         material.SetFloat("_SSROff", 1f);
 

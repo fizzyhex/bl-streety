@@ -45,7 +45,7 @@ public sealed class NodeMesh
     public Double4x4 Matrix;
 
     /// <summary>
-    /// interleaved position (3 floats) + uv (2 floats); z already mirrored for unity.
+    /// interleaved position (3 floats) + normal (3 floats) + uv (2 floats); z already mirrored for unity.
     /// </summary>
     public float[] Vertices;
 
@@ -63,7 +63,7 @@ public sealed class NodeMesh
     // local-space bounds of the mirrored vertices
     public float MinX, MinY, MinZ, MaxX, MaxY, MaxZ;
 
-    public const int FloatsPerVertex = 5;
+    public const int FloatsPerVertex = 8;
 }
 
 public struct SubMesh

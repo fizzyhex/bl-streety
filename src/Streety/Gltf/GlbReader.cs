@@ -6,12 +6,13 @@ using Streety.Geo;
 namespace Streety.Gltf;
 
 /// <summary>
-/// minimal glb reader for google's photorealistic 3d tiles: triangle primitives with POSITION, TEXCOORD_0 and a
-/// base colour texture, optionally draco compressed. thread-safe and allocation-light; runs on workers.
+/// minimal glb reader for google's photorealistic 3d tiles: triangle primitives with POSITION, TEXCOORD_0, an
+/// optional NORMAL and a base colour texture, optionally draco compressed. thread-safe and allocation-light; runs on workers.
 /// </summary>
 /// <remarks>
 /// output vertices are mirrored on local z and triangle winding is reversed to match <see cref="GeoOrigin"/>.
-/// uvs are flipped vertically for unity's bottom-left texture origin.
+/// uvs are flipped vertically for unity's bottom-left texture origin. google's tiles don't ship normals, so
+/// primitives without them get area-weighted smooth normals computed here, off the main thread.
 /// </remarks>
 public static class GlbReader
 {
@@ -31,6 +32,7 @@ public static class GlbReader
     private sealed class Primitive
     {
         public float[] Positions;
+        public float[] Normals;
         public float[] Uvs;
         public uint[] Indices;
         public int ImageIndex = -1;
@@ -163,6 +165,9 @@ public static class GlbReader
             var attributes = primitive.GetProperty("attributes");
 
             result.Positions = ReadFloats(root, bin, attributes.GetProperty("POSITION").GetInt32(), 3);
+
+            if (attributes.TryGetProperty("NORMAL", out var normal))
+                result.Normals = ReadFloats(root, bin, normal.GetInt32(), 3);
 
             if (attributes.TryGetProperty("TEXCOORD_0", out var uv))
                 result.Uvs = ReadFloats(root, bin, uv.GetInt32(), 2);
@@ -326,6 +331,9 @@ public static class GlbReader
 
             result.Positions = ReadDracoAttribute(mesh, attributes.GetProperty("POSITION").GetInt32(), 3, vertexCount);
 
+            if (attributes.TryGetProperty("NORMAL", out var normal))
+                result.Normals = ReadDracoAttribute(mesh, normal.GetInt32(), 3, vertexCount);
+
             if (attributes.TryGetProperty("TEXCOORD_0", out var uv))
                 result.Uvs = ReadDracoAttribute(mesh, uv.GetInt32(), 2, vertexCount);
 
@@ -440,10 +448,17 @@ public static class GlbReader
                 mesh.Vertices[o + 1] = y;
                 mesh.Vertices[o + 2] = z;
 
+                if (p.Normals != null)
+                {
+                    mesh.Vertices[o + 3] = p.Normals[i * 3];
+                    mesh.Vertices[o + 4] = p.Normals[i * 3 + 1];
+                    mesh.Vertices[o + 5] = -p.Normals[i * 3 + 2];
+                }
+
                 if (p.Uvs != null)
                 {
-                    mesh.Vertices[o + 3] = p.Uvs[i * 2];
-                    mesh.Vertices[o + 4] = 1f - p.Uvs[i * 2 + 1];
+                    mesh.Vertices[o + 6] = p.Uvs[i * 2];
+                    mesh.Vertices[o + 7] = 1f - p.Uvs[i * 2 + 1];
                 }
 
                 if (x < mesh.MinX) mesh.MinX = x;
@@ -465,6 +480,9 @@ public static class GlbReader
                 WriteIndex(indexSpan, indexCursor++, p.Indices[t * 3 + 1], use32);
             }
 
+            if (p.Normals == null)
+                ComputeNormals(mesh.Vertices, vertexCursor, count, p.Indices);
+
             mesh.SubMeshes.Add(new SubMesh
             {
                 IndexStart = start,
@@ -477,6 +495,68 @@ public static class GlbReader
         }
 
         return mesh;
+    }
+
+    /// <summary>
+    /// area-weighted smooth normals for one primitive, written straight into the interleaved (already mirrored)
+    /// vertices: unnormalised face crosses are summed per vertex, so bigger triangles count for more.
+    /// </summary>
+    private static void ComputeNormals(float[] vertices, int baseVertex, int count, uint[] indices)
+    {
+        const int stride = NodeMesh.FloatsPerVertex;
+        var triangles = indices.Length / 3;
+
+        for (var t = 0; t < triangles; t++)
+        {
+            // gltf winding; after the z mirror, cross(c - a, b - a) faces outward (see Merge)
+            var ia = indices[t * 3];
+            var ib = indices[t * 3 + 1];
+            var ic = indices[t * 3 + 2];
+
+            if (ia >= count || ib >= count || ic >= count)
+                continue;
+
+            var a = (baseVertex + (int)ia) * stride;
+            var b = (baseVertex + (int)ib) * stride;
+            var c = (baseVertex + (int)ic) * stride;
+
+            var ux = vertices[c] - vertices[a];
+            var uy = vertices[c + 1] - vertices[a + 1];
+            var uz = vertices[c + 2] - vertices[a + 2];
+            var vx = vertices[b] - vertices[a];
+            var vy = vertices[b + 1] - vertices[a + 1];
+            var vz = vertices[b + 2] - vertices[a + 2];
+
+            var nx = uy * vz - uz * vy;
+            var ny = uz * vx - ux * vz;
+            var nz = ux * vy - uy * vx;
+
+            vertices[a + 3] += nx; vertices[a + 4] += ny; vertices[a + 5] += nz;
+            vertices[b + 3] += nx; vertices[b + 4] += ny; vertices[b + 5] += nz;
+            vertices[c + 3] += nx; vertices[c + 4] += ny; vertices[c + 5] += nz;
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var o = (baseVertex + i) * stride + 3;
+            var x = vertices[o];
+            var y = vertices[o + 1];
+            var z = vertices[o + 2];
+            var lengthSq = x * x + y * y + z * z;
+
+            if (lengthSq > 1e-20f)
+            {
+                var inverse = 1f / MathF.Sqrt(lengthSq);
+                vertices[o] = x * inverse;
+                vertices[o + 1] = y * inverse;
+                vertices[o + 2] = z * inverse;
+            }
+            else
+            {
+                // unreferenced or only on degenerate triangles
+                vertices[o + 1] = 1f;
+            }
+        }
     }
 
     private static void WriteIndex(Span<byte> span, int index, uint value, bool use32)

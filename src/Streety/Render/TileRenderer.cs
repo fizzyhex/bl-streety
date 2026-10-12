@@ -50,7 +50,6 @@ public sealed class TileRenderer : IDisposable
 
     private static readonly int BaseMap = Shader.PropertyToID("_BaseMap");
     private static readonly int MainTex = Shader.PropertyToID("_MainTex");
-    private static readonly int EmissionMap = Shader.PropertyToID("_EmissionMap");
 
     private readonly Transform _parent;
     private readonly Material _template;
@@ -63,9 +62,11 @@ public sealed class TileRenderer : IDisposable
         _template = template;
         _layer = layer;
 
-        _layout = new Il2CppStructArray<VertexAttributeDescriptor>(2);
+        // must follow VertexAttribute order; matches NodeMesh.Vertices
+        _layout = new Il2CppStructArray<VertexAttributeDescriptor>(3);
         _layout[0] = new VertexAttributeDescriptor(VertexAttribute.Position, VertexAttributeFormat.Float32, 3, 0);
-        _layout[1] = new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 0);
+        _layout[1] = new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3, 0);
+        _layout[2] = new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 0);
     }
 
     public LoadedTile Create(Tiles.Tile tile, TileContent content, GeoOrigin origin, bool keepReadable)
@@ -98,9 +99,9 @@ public sealed class TileRenderer : IDisposable
             part.AddComponent<MeshFilter>().sharedMesh = mesh;
 
             var renderer = part.AddComponent<MeshRenderer>();
+            // the imagery already has the sun's shadows baked in; only rigs and props shadow the tiles
             renderer.shadowCastingMode = ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
-            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.receiveShadows = true;
             renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
 
             var partMaterials = new Il2CppReferenceArray<Material>(node.SubMeshes.Count);
@@ -173,10 +174,6 @@ public sealed class TileRenderer : IDisposable
 
             if (material.HasProperty(MainTex))
                 material.SetTexture(MainTex, texture);
-
-            // emissive templates (see TileMaterials) show the imagery through emission
-            if (material.HasProperty(EmissionMap))
-                material.SetTexture(EmissionMap, texture);
 
             loaded.Materials.Add(material);
             materials[i] = material;
