@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "bonelab": {
+      "command": "dotnet",
+      "args": [
+        "${BONELAB_MCP_ROOT:-../bonelab-mcp}/src/BonelabMcp.Host/bin/Release/net8.0/BonelabMcp.Host.dll",
+        "serve"
+      ]
+    }
+  }
+}
