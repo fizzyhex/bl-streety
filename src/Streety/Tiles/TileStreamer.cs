@@ -503,8 +503,15 @@ public sealed class TileStreamer : IDisposable
 
         if (LoadedBytes > budget)
         {
-            // least recently selected first; never evict what's on screen
-            _loaded.Sort((a, b) => a.LastSelectedFrame.CompareTo(b.LastSelectedFrame));
+            // tiles outside this frame's traversal first, then least recently selected; never evict what's on screen.
+            // ancestors of on-screen tiles are visited every frame but never selected, and they're the fallback when a
+            // refinement isn't ready yet, so evicting them first drops whole regions to a much coarser lod
+            _loaded.Sort((a, b) =>
+            {
+                var visited = a.LastVisitedFrame.CompareTo(b.LastVisitedFrame);
+
+                return visited != 0 ? visited : a.LastSelectedFrame.CompareTo(b.LastSelectedFrame);
+            });
 
             var removed = 0;
 

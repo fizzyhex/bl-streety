@@ -33,7 +33,7 @@ public static class Prefs
         MaxConcurrentRequests = _category.CreateEntry("max_concurrent_requests", 12, "max concurrent requests");
         UploadBudgetMs = _category.CreateEntry("upload_budget_ms", 2f,
             "upload budget (ms/frame)", "main-thread time spent creating meshes/textures each frame");
-        MemoryBudgetMb = _category.CreateEntry("memory_budget_mb", 1024, "tile memory budget (mb)");
+        MemoryBudgetMb = _category.CreateEntry("memory_budget_mb", 2048, "tile memory budget (mb)");
         ColliderRadius = _category.CreateEntry("collider_radius", 150f,
             "collider radius (m)", "tiles within this distance of a rig get collision");
         StartLatitude = _category.CreateEntry("start_latitude", 48.858370, "start latitude");
