@@ -43,10 +43,38 @@ public sealed class Geocoder : IDisposable
         }
 
         var result = root.GetProperty("results")[0];
+
+        // google falls back to the whole state or country when it can't match the rest, which lands
+        // players in the middle of nowhere
+        if (IsPartialMatch(result) && IsRegion(result))
+            throw new GeocodeException("couldn't find that exact place; try adding a city");
+
         var location = result.GetProperty("geometry").GetProperty("location");
         var name = result.TryGetProperty("formatted_address", out var address) ? address.GetString() : query;
 
         return new GeocodeResult(location.GetProperty("lat").GetDouble(), location.GetProperty("lng").GetDouble(), name);
+    }
+
+    private static bool IsPartialMatch(JsonElement result) =>
+        result.TryGetProperty("partial_match", out var partial) && partial.ValueKind == JsonValueKind.True;
+
+    private static bool IsRegion(JsonElement result)
+    {
+        if (!result.TryGetProperty("types", out var types))
+            return false;
+
+        foreach (var type in types.EnumerateArray())
+        {
+            switch (type.GetString())
+            {
+                case "country":
+                case "administrative_area_level_1":
+                case "administrative_area_level_2":
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     public void Dispose() => _http.Dispose();

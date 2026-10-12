@@ -286,7 +286,8 @@ public sealed class TileStreamer : IDisposable
                     return true;
             }
 
-            if (tile.GeometricError <= ColliderMaxError && tile.Volume.DistanceTo(viewer.Ecef) <= viewer.ColliderRadius)
+            if ((tile.GeometricError <= ColliderMaxError || tile.IsLeaf)
+                && tile.Volume.DistanceTo(viewer.Ecef) <= viewer.ColliderRadius)
                 return true;
         }
 
@@ -474,7 +475,8 @@ public sealed class TileStreamer : IDisposable
 
             try
             {
-                var keepReadable = tile.GeometricError <= ReadableMaxError;
+                // leaves are the finest data there is, so coarse-coverage areas still get ground
+                var keepReadable = tile.GeometricError <= ReadableMaxError || tile.IsLeaf;
                 tile.Loaded = _renderer.Create(tile, tile.Pending, Origin, keepReadable);
                 tile.State = TileState.Ready;
 
