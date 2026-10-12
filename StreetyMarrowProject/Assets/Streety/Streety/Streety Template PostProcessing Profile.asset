@@ -38,10 +38,10 @@ MonoBehaviour:
     m_Value: 1
   SkyTexture:
     m_OverrideState: 1
-    m_Value: {fileID: 8900000, guid: 55e531308e9afe947a9af85a41dfdee8, type: 3}
+    m_Value: {fileID: 0}
   FogViewDistance:
-    m_OverrideState: 0
-    m_Value: 50
+    m_OverrideState: 1
+    m_Value: 10000
   FogBaseHeight:
     m_OverrideState: 1
     m_Value: 5

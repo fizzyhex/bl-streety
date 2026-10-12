@@ -1,7 +1,17 @@
 <Project>
-  <!-- override per-machine with a BONELAB_DIR environment variable -->
+  <!--
+    point BONELAB_DIR at your bonelab install (the folder holding BONELAB_Steam_Windows64.exe).
+    msbuild reads environment variables as properties, so a user-level env var works for
+    dotnet, rider and visual studio alike; restart the ide after setting it.
+    without it we fall back to the default steam library.
+  -->
   <PropertyGroup>
-    <BONELAB_DIR Condition="'$(BONELAB_DIR)' == ''">E:\SteamLibrary\steamapps\common\BONELAB</BONELAB_DIR>
+    <_SteamPath Condition="'$(OS)' == 'Windows_NT'">$([MSBuild]::GetRegistryValueFromView('HKEY_CURRENT_USER\Software\Valve\Steam', 'SteamPath', null, RegistryView.Default))</_SteamPath>
+    <BONELAB_DIR Condition="'$(BONELAB_DIR)' == '' And '$(_SteamPath)' != ''">$(_SteamPath)\steamapps\common\BONELAB</BONELAB_DIR>
+    <BONELAB_DIR Condition="'$(BONELAB_DIR)' != ''">$([System.IO.Path]::GetFullPath('$(BONELAB_DIR)').TrimEnd('\').TrimEnd('/'))</BONELAB_DIR>
+
+    <BonelabModsDir>$(BONELAB_DIR)\Mods</BonelabModsDir>
+    <BonelabUserLibsDir>$(BONELAB_DIR)\UserLibs</BonelabUserLibsDir>
     <MelonNet6>$(BONELAB_DIR)\MelonLoader\net6</MelonNet6>
     <Il2CppAssemblies>$(BONELAB_DIR)\MelonLoader\Il2CppAssemblies</Il2CppAssemblies>
   </PropertyGroup>

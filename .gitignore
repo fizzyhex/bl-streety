@@ -4,6 +4,9 @@
 
 # UNITY PROJECT
 
+
+StreetyMarrowProject/Assets/AddressableAssetsData
+
 StreetyMarrowProject/Library
 # built pallets are build output (and include other creators' content)
 StreetyMarrowProject/BuiltPallets/
