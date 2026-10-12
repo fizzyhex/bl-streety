@@ -324,17 +324,12 @@ Shader "fizzyhex/streety/Sky"
 
                 half4 finalColour = Volumetrics(half4(colour, 1.0), i.wPos);
 
-                // dither so gradients don't band
-                const half dither[4][4] =
-                {
-                    { -0.5, 0, -0.375, 0.125 },
-                    { 0.25, -0.25, 0.375, -0.125 },
-                    { -0.3125, 0.1875, -0.4375, 0.0625 },
-                    { 0.4375, -0.0625, 0.3125, -0.1875 }
-                };
-
-                int2 ditherCoords = int2(fmod(i.pos.xy, 4.0));
-                finalColour.rgb += (1.0 / 255.0) * dither[ditherCoords.y][ditherCoords.x];
+                // dither so gradients don't band. it's applied in srgb so it stays one 8-bit step at night, where a
+                // linear step is many; and it's a hash rather than a 4x4 pattern, since foveated rendering shades
+                // whole blocks of pixels at once and a pattern then collapses into a flat offset around the periphery
+                float noise = frac(52.9829189 * frac(dot(i.pos.xy, float2(0.06711056, 0.00583715)))) - 0.5;
+                float3 srgb = LinearToSRGB(max(finalColour.rgb, 0.0));
+                finalColour.rgb = SRGBToLinear(max(srgb + noise / 255.0, 0.0));
                 return finalColour;
             }
             ENDHLSL
