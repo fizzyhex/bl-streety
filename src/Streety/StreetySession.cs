@@ -35,6 +35,7 @@ public sealed class StreetySession : IDisposable
     private readonly Il2CppWorker _worker;
     private readonly TileStreamer _streamer;
     private readonly AttributionLabel _attribution;
+    private readonly RigReflectionProbe _reflections;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly List<Viewer> _viewers = new();
 
@@ -83,6 +84,7 @@ public sealed class StreetySession : IDisposable
         _streamer = new TileStreamer(_client, renderer, _worker, origin);
 
         _attribution = new AttributionLabel();
+        _reflections = new RigReflectionProbe();
 
         // the rig may not exist yet during level load; the first warp starts once it does
         _pendingStart = true;
@@ -162,6 +164,7 @@ public sealed class StreetySession : IDisposable
             _attribution.SetText(_streamer.BuildAttribution());
 
         _attribution.Update();
+        _reflections.Update();
 
         if (_warp == WarpPhase.None && _streamer.LastError != null && _streamer.SelectedCount == 0)
             Status = _streamer.LastError.ToLowerInvariant();
@@ -379,6 +382,7 @@ public sealed class StreetySession : IDisposable
         _client?.Dispose();
         _geocoder?.Dispose();
         _attribution?.Dispose();
+        _reflections?.Dispose();
 
         if (_root != null)
             UnityEngine.Object.Destroy(_root);
