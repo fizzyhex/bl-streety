@@ -4,6 +4,7 @@ using Il2CppSLZ.Marrow;
 
 using Streety.Audio;
 using Streety.Geo;
+using Streety.Movement;
 using Streety.Render;
 using Streety.Services;
 using Streety.Tiles;
@@ -45,6 +46,7 @@ public sealed class StreetySession : IDisposable
     private readonly Atmosphere _atmosphere;
     private readonly SkyFog _sky;
     private readonly StreetyMusic _music;
+    private readonly NimbusBoost _nimbus;
     private readonly WaterMap _water;
     private readonly WaterBodies _waterBodies;
     private readonly TileNavMesh _navMesh;
@@ -72,6 +74,8 @@ public sealed class StreetySession : IDisposable
     public string LocationName { get; private set; }
 
     public bool IsWarping => _warp != WarpPhase.None;
+
+    public NimbusBoost Nimbus => _nimbus;
 
     public StreetySession()
     {
@@ -120,6 +124,7 @@ public sealed class StreetySession : IDisposable
         _atmosphere = new Atmosphere();
         _sky = new SkyFog();
         _music = new StreetyMusic();
+        _nimbus = new NimbusBoost();
 
         // the rig may not exist yet during level load; the first warp starts once it does
         _pendingStart = true;
@@ -221,6 +226,8 @@ public sealed class StreetySession : IDisposable
 
         // music plays once an area's loaded, not while waiting on the platform
         _music.Update(_arrived);
+
+        _nimbus.Update(_streamer.Origin);
 
         if (_warp == WarpPhase.None && _streamer.LastError != null && _streamer.SelectedCount == 0)
             Status = _streamer.LastError.ToLowerInvariant();
@@ -473,6 +480,7 @@ public sealed class StreetySession : IDisposable
         _atmosphere?.Dispose();
         _sun?.Dispose();
         _music?.Dispose();
+        _nimbus?.Dispose();
         _waterBodies?.Dispose();
         _water?.Dispose();
 
