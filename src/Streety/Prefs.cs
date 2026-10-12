@@ -20,6 +20,8 @@ public static class Prefs
     public static MelonPreferences_Entry<float> RebaseDistance { get; private set; }
     public static MelonPreferences_Entry<bool> DevAnyLevel { get; private set; }
     public static MelonPreferences_Entry<float> MusicVolume { get; private set; }
+    public static MelonPreferences_Entry<float> SunHourOffset { get; private set; }
+    public static MelonPreferences_Entry<float> FogVisibilityKm { get; private set; }
 
     public static void Initialize()
     {
@@ -47,6 +49,10 @@ public static class Prefs
             "dev: stream in any level", "start streety in every level, not just the streety level");
         MusicVolume = _category.CreateEntry("music_volume", 0.5f,
             "music volume", "0-1; sits under bonelab's own music volume");
+        SunHourOffset = _category.CreateEntry("sun_hour_offset", 0f,
+            "sun hour offset", "shifts the sun's clock by this many hours; 0 = the real time at the location");
+        FogVisibilityKm = _category.CreateEntry("fog_visibility_km", 30f,
+            "fog visibility (km)", "how far you can see before the haze takes over; 0 turns fog off");
     }
 
     /// <summary>

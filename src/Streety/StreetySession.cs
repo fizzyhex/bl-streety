@@ -37,6 +37,8 @@ public sealed class StreetySession : IDisposable
     private readonly TileStreamer _streamer;
     private readonly AttributionLabel _attribution;
     private readonly RigReflectionProbe _reflections;
+    private readonly SunDriver _sun;
+    private readonly SkyFog _sky;
     private readonly StreetyMusic _music;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly List<Viewer> _viewers = new();
@@ -88,6 +90,8 @@ public sealed class StreetySession : IDisposable
 
         _attribution = new AttributionLabel();
         _reflections = new RigReflectionProbe();
+        _sun = new SunDriver();
+        _sky = new SkyFog();
         _music = new StreetyMusic();
 
         // the rig may not exist yet during level load; the first warp starts once it does
@@ -170,6 +174,10 @@ public sealed class StreetySession : IDisposable
 
         _attribution.Update();
         _reflections.Update();
+
+        // sun first: the sky re-renders from wherever it ended up
+        _sun.Update(_streamer.Origin);
+        _sky.Update();
 
         // music plays once an area's loaded, not while waiting on the platform
         _music.Update(_arrived);
@@ -392,6 +400,8 @@ public sealed class StreetySession : IDisposable
         _geocoder?.Dispose();
         _attribution?.Dispose();
         _reflections?.Dispose();
+        _sky?.Dispose();
+        _sun?.Dispose();
         _music?.Dispose();
 
         if (_root != null)

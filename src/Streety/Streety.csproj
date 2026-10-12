@@ -47,6 +47,7 @@
     <Reference Include="UnityEngine.AudioModule" HintPath="$(Il2CppAssemblies)\UnityEngine.AudioModule.dll" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(Il2CppAssemblies)\UnityEngine.ImageConversionModule.dll" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(Il2CppAssemblies)\UnityEngine.TextRenderingModule.dll" />
+    <Reference Include="Unity.RenderPipelines.Universal.Runtime" HintPath="$(Il2CppAssemblies)\Unity.RenderPipelines.Universal.Runtime.dll" />
 
     <Reference Include="BoneLib" HintPath="$(BONELAB_DIR)\Mods\BoneLib.dll" />
   </ItemGroup>
