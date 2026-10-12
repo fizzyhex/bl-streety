@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31fee4a281eed89449118a9e046e7890, type: 3}
+  m_Name: ge - music_terrain_flying.md
+  m_EditorClassIdentifier: 
+  _barcode:
+    _id: Fizzyhex.streety.MonoDisc.gemusicterrainflying
+  _title: GE - music_terrain_flying
+  _description: Music composed by Joshua Moshier for Google Earth VR!
+  _unlockable: 0
+  _redacted: 0
+  _dataCardAsset:
+    _assetGUID: ea5f008eb5fc6a04aabf7fe9080ee11a
+    _editorAssetChanged: 0
+  _audioClip:
+    _assetGUID: 32bacf3796a50444e991e1afd0ee13ce
+    _editorAssetChanged: 0

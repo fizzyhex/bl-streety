@@ -19,6 +19,7 @@ public static class Prefs
     public static MelonPreferences_Entry<float> FarClip { get; private set; }
     public static MelonPreferences_Entry<float> RebaseDistance { get; private set; }
     public static MelonPreferences_Entry<bool> DevAnyLevel { get; private set; }
+    public static MelonPreferences_Entry<float> MusicVolume { get; private set; }
 
     public static void Initialize()
     {
@@ -44,6 +45,8 @@ public static class Prefs
             "origin rebase distance (m)", "recentre the world when a player gets this far from the origin");
         DevAnyLevel = _category.CreateEntry("dev_any_level", false,
             "dev: stream in any level", "start streety in every level, not just the streety level");
+        MusicVolume = _category.CreateEntry("music_volume", 0.5f,
+            "music volume", "0-1; sits under bonelab's own music volume");
     }
 
     /// <summary>
