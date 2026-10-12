@@ -35,9 +35,13 @@ public sealed class StreetySession : IDisposable
     private readonly Geocoder _geocoder;
     private readonly Il2CppWorker _worker;
     private readonly TileStreamer _streamer;
+    private readonly TileRenderer _renderer;
     private readonly AttributionLabel _attribution;
     private readonly RigReflectionProbe _reflections;
     private readonly SunDriver _sun;
+    private readonly RenderAssets _renderAssets;
+    private readonly GroundTone _ground;
+    private readonly Atmosphere _atmosphere;
     private readonly SkyFog _sky;
     private readonly StreetyMusic _music;
     private readonly CancellationTokenSource _lifetime = new();
@@ -84,13 +88,16 @@ public sealed class StreetySession : IDisposable
         _geocoder = new Geocoder(key);
         _worker = new Il2CppWorker("streety collider baker");
 
-        var renderer = new TileRenderer(_root.transform, template, layer);
+        _ground = new GroundTone();
+        _renderer = new TileRenderer(_root.transform, template, layer) { Ground = _ground };
         var origin = new GeoOrigin(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, 0);
-        _streamer = new TileStreamer(_client, renderer, _worker, origin);
+        _streamer = new TileStreamer(_client, _renderer, _worker, origin);
 
         _attribution = new AttributionLabel();
         _reflections = new RigReflectionProbe();
         _sun = new SunDriver();
+        _renderAssets = new RenderAssets();
+        _atmosphere = new Atmosphere();
         _sky = new SkyFog();
         _music = new StreetyMusic();
 
@@ -129,6 +136,7 @@ public sealed class StreetySession : IDisposable
 
         // a new place: nothing loaded is useful any more
         _streamer.UnloadAll();
+        _ground.Reset();
         _streamer.SetOrigin(new GeoOrigin(latitude, longitude, 0));
 
         CreatePlatform(new Vector3(0, WaitHeight, 0));
@@ -147,10 +155,12 @@ public sealed class StreetySession : IDisposable
 
         if (_pendingStart)
         {
-            if (Player.RigManager == null)
+            // wait for streety's materials too, so no tile gets drawn with the fallback
+            if (Player.RigManager == null || !_renderAssets.Settled)
                 return;
 
             _pendingStart = false;
+            UseRenderAssets();
             BeginWarp(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, Prefs.StartName.Value);
         }
 
@@ -175,15 +185,26 @@ public sealed class StreetySession : IDisposable
         _attribution.Update();
         _reflections.Update();
 
-        // sun first: the sky re-renders from wherever it ended up
+        // sun first, then the air it lights; the sky cubemap re-renders from wherever they ended up
+        var eye = camera != null ? camera.transform.position : Vector3.zero;
         _sun.Update(_streamer.Origin);
-        _sky.Update();
+        _atmosphere.Update(_streamer.Origin, _sun, _ground, eye);
+        _sky.Visibility = _atmosphere.LocalVisibility;
+        _sky.Update(_atmosphere.Revision, eye);
 
         // music plays once an area's loaded, not while waiting on the platform
         _music.Update(_arrived);
 
         if (_warp == WarpPhase.None && _streamer.LastError != null && _streamer.SelectedCount == 0)
             Status = _streamer.LastError.ToLowerInvariant();
+    }
+
+    private void UseRenderAssets()
+    {
+        if (_renderAssets.Tile != null)
+            _renderer.Template = _renderAssets.Tile;
+
+        _atmosphere.UseSky(_renderAssets.Sky);
     }
 
     private Camera FindCamera()
@@ -401,6 +422,7 @@ public sealed class StreetySession : IDisposable
         _attribution?.Dispose();
         _reflections?.Dispose();
         _sky?.Dispose();
+        _atmosphere?.Dispose();
         _sun?.Dispose();
         _music?.Dispose();
 

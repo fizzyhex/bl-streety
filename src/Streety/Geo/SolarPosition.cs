@@ -84,5 +84,16 @@ public static class SolarPosition
         return new Double3(Math.Sin(az) * Math.Cos(el), Math.Sin(el), Math.Cos(az) * Math.Cos(el));
     }
 
+    /// <summary>
+    /// local mean sidereal time in degrees: how far the stars have turned overhead.
+    /// </summary>
+    public static double LocalSiderealDegrees(double longitudeDeg, DateTime utc)
+    {
+        utc = utc.Kind == DateTimeKind.Local ? utc.ToUniversalTime() : utc;
+
+        var daysSinceJ2000 = utc.ToOADate() + 2415018.5 - 2451545.0;
+        return Mod(280.46061837 + 360.98564736629 * daysSinceJ2000 + longitudeDeg, 360);
+    }
+
     private static double Mod(double value, double modulus) => ((value % modulus) + modulus) % modulus;
 }

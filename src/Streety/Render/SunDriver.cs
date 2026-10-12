@@ -45,6 +45,16 @@ public sealed class SunDriver : IDisposable
     /// </summary>
     public float Elevation { get; private set; }
 
+    /// <summary>
+    /// 0-1 cloud cover between the sun and the ground; thick cloud dims it.
+    /// </summary>
+    public float Overcast { get; set; }
+
+    /// <summary>
+    /// the level's sun once found.
+    /// </summary>
+    public Light Light => _light;
+
     public void Update(GeoOrigin origin)
     {
         if (!Resolve())
@@ -63,7 +73,7 @@ public sealed class SunDriver : IDisposable
         var fade = Mathf.InverseLerp(FadeEndDegrees, FadeStartDegrees, Elevation);
 
         _light.color = Color.Lerp(_originalColour, HorizonColour, warmth * warmth);
-        _light.intensity = _originalIntensity * fade * fade;
+        _light.intensity = _originalIntensity * fade * fade * (1f - 0.65f * Overcast * Overcast);
 
         // no point rendering shadows from a sun under the ground
         _light.shadows = fade > 0f ? _originalShadows : LightShadows.None;

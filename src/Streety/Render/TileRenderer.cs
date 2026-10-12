@@ -52,14 +52,13 @@ public sealed class TileRenderer : IDisposable
     private static readonly int MainTex = Shader.PropertyToID("_MainTex");
 
     private readonly Transform _parent;
-    private readonly Material _template;
     private readonly int _layer;
     private readonly Il2CppStructArray<VertexAttributeDescriptor> _layout;
 
     public TileRenderer(Transform parent, Material template, int layer)
     {
         _parent = parent;
-        _template = template;
+        Template = template;
         _layer = layer;
 
         // must follow VertexAttribute order; matches NodeMesh.Vertices
@@ -68,6 +67,16 @@ public sealed class TileRenderer : IDisposable
         _layout[1] = new VertexAttributeDescriptor(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3, 0);
         _layout[2] = new VertexAttributeDescriptor(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2, 0);
     }
+
+    /// <summary>
+    /// material cloned per tile image; tiles created from now on use it.
+    /// </summary>
+    public Material Template { get; set; }
+
+    /// <summary>
+    /// optional; fed a few decoded images so the atmosphere knows what the region looks like.
+    /// </summary>
+    public GroundTone Ground { get; set; }
 
     public LoadedTile Create(Tiles.Tile tile, TileContent content, GeoOrigin origin, bool keepReadable)
     {
@@ -111,7 +120,7 @@ public sealed class TileRenderer : IDisposable
                 var image = node.SubMeshes[i].ImageIndex;
                 partMaterials[i] = image >= 0 && image < materials.Length && materials[image] != null
                     ? materials[image]
-                    : _template;
+                    : Template;
             }
 
             renderer.sharedMaterials = partMaterials;
@@ -158,16 +167,25 @@ public sealed class TileRenderer : IDisposable
                 anisoLevel = 4,
             };
 
-            if (!ImageConversion.LoadImage(texture, bytes, true))
+            // a sampled image stays readable just long enough to be averaged
+            var sample = Ground is { Wants: true };
+
+            if (!ImageConversion.LoadImage(texture, bytes, !sample))
             {
                 UnityEngine.Object.Destroy(texture);
                 continue;
             }
 
+            if (sample)
+            {
+                Ground.Sample(texture);
+                texture.Apply(true, true);
+            }
+
             loaded.Textures.Add(texture);
             loaded.Bytes += (long)texture.width * texture.height * 4 * 4 / 3;
 
-            var material = new Material(_template);
+            var material = new Material(Template);
 
             if (material.HasProperty(BaseMap))
                 material.SetTexture(BaseMap, texture);

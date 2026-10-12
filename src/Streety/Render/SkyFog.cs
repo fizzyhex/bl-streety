@@ -16,8 +16,9 @@ namespace Streety.Render;
 /// colour — whatever moved it.
 /// </para>
 /// <para>
-/// density comes from a visibility distance (koschmieder: 2% contrast left at that distance), so it can later be
-/// driven per region or from weather.
+/// density comes from a visibility distance (koschmieder: 2% contrast left at that distance), which
+/// <see cref="Atmosphere"/> works out per region and weather. streety's own tile shader fades into its height haze
+/// instead; this fog is for everything else (rigs, props) so they sit in the same air.
 /// </para>
 /// <para>
 /// litmas only ships its exp2 fog variant (<c>skip_variants FOG_LINEAR FOG_EXP</c>), so that's the mode: it also
@@ -41,6 +42,7 @@ public sealed class SkyFog : IDisposable
     private Camera _camera;
     private Vector3 _lastSunForward;
     private Color _lastSunColour;
+    private int _lastRevision;
     private bool _rendered;
 
     public SkyFog()
@@ -54,9 +56,11 @@ public sealed class SkyFog : IDisposable
     /// <summary>
     /// how far you can see, in metres; sets the fog density.
     /// </summary>
-    public float Visibility { get; set; } = Prefs.FogVisibilityKm.Value * 1000f;
+    public float Visibility { get; set; } = 30000f;
 
-    public void Update()
+    /// <param name="revision">re-render when this changes, e.g. the weather moved on.</param>
+    /// <param name="camera">where the sky is seen from; its haze depends on altitude.</param>
+    public void Update(int revision, Vector3 camera)
     {
         RenderSettings.fog = Visibility > 0f;
         RenderSettings.fogMode = FogMode.ExponentialSquared;
@@ -69,21 +73,25 @@ public sealed class SkyFog : IDisposable
         var colour = sun != null ? sun.color * sun.intensity : Color.black;
 
         if (_rendered
+            && revision == _lastRevision
             && Vector3.Angle(forward, _lastSunForward) < RefreshDegrees
             && MaxDifference(colour, _lastSunColour) < RefreshColour)
             return;
 
         _lastSunForward = forward;
         _lastSunColour = colour;
+        _lastRevision = revision;
         _rendered = true;
 
-        Render();
+        Render(camera);
     }
 
-    private void Render()
+    private void Render(Vector3 position)
     {
         if (_cube == null)
             Create();
+
+        _camera.transform.position = position;
 
         _camera.RenderToCubemap(_cube, 63);
 
@@ -92,7 +100,7 @@ public sealed class SkyFog : IDisposable
         SkyManager.skytexture = _cube;
         SkyManager.SetSkyTexture(_cube);
 
-        // ambient lighting is sampled from the skybox too; without this nights stay lit like the level's bake
+        // the default reflection probe is sampled from the skybox too (ambient light is set by Atmosphere)
         DynamicGI.UpdateEnvironment();
     }
 

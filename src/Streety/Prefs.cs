@@ -51,8 +51,8 @@ public static class Prefs
             "music volume", "0-1; sits under bonelab's own music volume");
         SunHourOffset = _category.CreateEntry("sun_hour_offset", 0f,
             "sun hour offset", "shifts the sun's clock by this many hours; 0 = the real time at the location");
-        FogVisibilityKm = _category.CreateEntry("fog_visibility_km", 30f,
-            "fog visibility (km)", "how far you can see before the haze takes over; 0 turns fog off");
+        FogVisibilityKm = _category.CreateEntry("fog_visibility_km", 0f,
+            "fog visibility (km)", "how far you can see at sea level; 0 = from the region and the weather");
     }
 
     /// <summary>
