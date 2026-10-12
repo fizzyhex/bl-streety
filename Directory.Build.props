@@ -1,0 +1,8 @@
+<Project>
+  <!-- override per-machine with a BONELAB_DIR environment variable -->
+  <PropertyGroup>
+    <BONELAB_DIR Condition="'$(BONELAB_DIR)' == ''">E:\SteamLibrary\steamapps\common\BONELAB</BONELAB_DIR>
+    <MelonNet6>$(BONELAB_DIR)\MelonLoader\net6</MelonNet6>
+    <Il2CppAssemblies>$(BONELAB_DIR)\MelonLoader\Il2CppAssemblies</Il2CppAssemblies>
+  </PropertyGroup>
+</Project>
