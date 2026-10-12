@@ -121,6 +121,10 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# marrow sdk preview meshes, regenerated on every pallet pack
+StreetyMarrowProject/Assets/_MarrowAssets/PackedAssets/**/PreviewMesh/
+StreetyMarrowProject/Assets/_MarrowAssets/PackedAssets/**/PreviewMesh.meta
 # BUILD OUTPUT
 
 src/**/bin/
