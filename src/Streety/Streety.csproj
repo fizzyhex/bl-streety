@@ -54,9 +54,29 @@
     <None Include="..\..\native\draco\dracodec_unity.dll" Link="dracodec_unity.dll" Condition="Exists('..\..\native\draco\dracodec_unity.dll')" />
   </ItemGroup>
 
-  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true' And Exists('$(BONELAB_DIR)')">
-    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(BONELAB_DIR)\Mods" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="..\..\native\draco\dracodec_unity.dll" DestinationFolder="$(BONELAB_DIR)\UserLibs" SkipUnchangedFiles="true" Condition="Exists('..\..\native\draco\dracodec_unity.dll')" />
+  <!-- fail early with a readable message instead of a wall of missing-reference errors -->
+  <Target Name="CheckBonelabDir" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(BONELAB_DIR)' == ''" Text="BONELAB_DIR isn't set. set it to your bonelab install folder (user env var), then restart your ide." />
+    <Error Condition="'$(BONELAB_DIR)' != '' And !Exists('$(MelonNet6)\MelonLoader.dll')" Text="no melonloader found under BONELAB_DIR ($(BONELAB_DIR)). check the path, and that melonloader has run at least once." />
+  </Target>
+
+  <!-- copies the built mod into $(BONELAB_DIR)\Mods; pass -p:DeployToGame=false to skip -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true'">
+    <ItemGroup>
+      <_DeployModFiles Include="$(TargetPath)" />
+      <_DeployModFiles Include="$(TargetDir)$(TargetName).pdb" Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+      <_DeployUserLibs Include="..\..\native\draco\dracodec_unity.dll" Condition="Exists('..\..\native\draco\dracodec_unity.dll')" />
+    </ItemGroup>
+    <Warning Condition="!Exists('$(BONELAB_DIR)')" Text="skipping deploy: BONELAB_DIR ($(BONELAB_DIR)) doesn't exist." />
+    <MakeDir Directories="$(BonelabModsDir);$(BonelabUserLibsDir)" Condition="Exists('$(BONELAB_DIR)')" />
+    <!-- a running game locks the dll; warn rather than fail so the build still succeeds -->
+    <Copy SourceFiles="@(_DeployModFiles)" DestinationFolder="$(BonelabModsDir)" SkipUnchangedFiles="true" Retries="3" RetryDelayMilliseconds="500" ContinueOnError="WarnAndContinue" Condition="Exists('$(BONELAB_DIR)')">
+      <Output TaskParameter="CopiedFiles" ItemName="_DeployedFiles" />
+    </Copy>
+    <Copy SourceFiles="@(_DeployUserLibs)" DestinationFolder="$(BonelabUserLibsDir)" SkipUnchangedFiles="true" Retries="3" RetryDelayMilliseconds="500" ContinueOnError="WarnAndContinue" Condition="Exists('$(BONELAB_DIR)')">
+      <Output TaskParameter="CopiedFiles" ItemName="_DeployedFiles" />
+    </Copy>
+    <Message Importance="high" Text="$(TargetName) -&gt; $(BonelabModsDir)" Condition="'@(_DeployedFiles)' != ''" />
   </Target>
 
 </Project>
