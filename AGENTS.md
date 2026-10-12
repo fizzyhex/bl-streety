@@ -13,3 +13,11 @@ Co-signed by virtual <cat species> 🐾 / <pseudo-email>
 ```
 
 Example: Co-signed by virtual calico 🐾 / kindcalico@donotreply.com
+
+## Multiplayer Native
+
+Features that concern the rig and changing of world state should make considerations for compatibilites with Bonelab Fusion:
+
+https://github.com/Lakatrazz/BONELAB-Fusion
+
+Level events can be synchronised using RPC Variables / RPC Events. Features should account for the possibility of multiple rigs owned by other players being able to co-exist.
