@@ -26,6 +26,9 @@ public static class Prefs
     public static MelonPreferences_Entry<string> OverpassUrls { get; private set; }
     public static MelonPreferences_Entry<bool> NavMesh { get; private set; }
     public static MelonPreferences_Entry<float> NavMeshRadius { get; private set; }
+    public static MelonPreferences_Entry<bool> NimbusBoost { get; private set; }
+    public static MelonPreferences_Entry<float> NimbusBoostMax { get; private set; }
+    public static MelonPreferences_Entry<float> NimbusBoostCeiling { get; private set; }
 
     public static void Initialize()
     {
@@ -66,6 +69,12 @@ public static class Prefs
             "npc navmesh", "bakes walkable ground around each player so npcs can move");
         NavMeshRadius = _category.CreateEntry("navmesh_radius", 100f,
             "navmesh radius (m)", "how far around a player npcs can walk; keep it within the collider radius");
+        NimbusBoost = _category.CreateEntry("nimbus_boost", true,
+            "nimbus altitude boost", "the nimbus gun flies faster the higher you are");
+        NimbusBoostMax = _category.CreateEntry("nimbus_boost_max", 40f,
+            "nimbus max boost", "speed multiplier at the boost ceiling; it ramps up exponentially on the way");
+        NimbusBoostCeiling = _category.CreateEntry("nimbus_boost_ceiling", 5000f,
+            "nimbus boost ceiling (m)", "height above the ground where the boost stops growing");
     }
 
     /// <summary>
