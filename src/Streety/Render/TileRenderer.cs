@@ -31,6 +31,19 @@ public sealed class LoadedTile
     public bool ColliderRequested;
     public bool HasCollider;
 
+    /// <summary>
+    /// cpu-side geometry kept for re-filtering colliders; only set when a collider filter is in use.
+    /// </summary>
+    public TileContent Geometry;
+
+    /// <summary>
+    /// filtered copies of <see cref="Meshes"/> the colliders use instead.
+    /// </summary>
+    public readonly List<Mesh> ColliderMeshes = new();
+
+    public bool ColliderBusy;
+    public int ColliderRevision;
+
     public bool Visible;
 }
 
@@ -247,20 +260,93 @@ public sealed class TileRenderer : IDisposable
     }
 
     /// <summary>
-    /// adds a mesh collider after the meshes were baked off-thread.
+    /// a position-only stand-in for a part's collider, keeping just <paramref name="indices"/>. main thread only.
     /// </summary>
-    public static void AddColliders(LoadedTile loaded)
+    public unsafe Mesh CreateColliderMesh(NodeMesh node, uint[] indices)
     {
-        if (loaded.HasCollider || loaded.Root == null)
+        const MeshUpdateFlags flags = MeshUpdateFlags.DontValidateIndices
+                                      | MeshUpdateFlags.DontRecalculateBounds
+                                      | MeshUpdateFlags.DontNotifyMeshUsers;
+
+        var mesh = new Mesh();
+        mesh.SetVertexBufferParams(node.VertexCount, _layout);
+
+        fixed (float* vertices = node.Vertices)
+        {
+            mesh.InternalSetVertexBufferData(0, (IntPtr)vertices, 0, 0, node.VertexCount,
+                NodeMesh.FloatsPerVertex * sizeof(float), flags);
+        }
+
+        mesh.SetIndexBufferParams(indices.Length, IndexFormat.UInt32);
+
+        fixed (uint* data = indices)
+        {
+            mesh.InternalSetIndexBufferData((IntPtr)data, 0, 0, indices.Length, sizeof(uint), flags);
+        }
+
+        mesh.subMeshCount = 1;
+        mesh.SetSubMesh(0, new SubMeshDescriptor(0, indices.Length, MeshTopology.Triangles), flags);
+
+        var min = new Vector3(node.MinX, node.MinY, node.MinZ);
+        var max = new Vector3(node.MaxX, node.MaxY, node.MaxZ);
+        mesh.bounds = new Bounds((min + max) * 0.5f, max - min);
+
+        // colliders need the cpu copy
+        mesh.UploadMeshData(false);
+        return mesh;
+    }
+
+    /// <summary>
+    /// adds or swaps mesh colliders after the meshes were baked off-thread. <paramref name="meshes"/> is per part;
+    /// null means <see cref="LoadedTile.Meshes"/>. replaced collider meshes are destroyed.
+    /// </summary>
+    public static void SetColliders(LoadedTile loaded, Mesh[] meshes = null)
+    {
+        if (loaded.Root == null)
+        {
+            DestroyMeshes(meshes, loaded);
             return;
+        }
+
+        var previous = loaded.ColliderMeshes.ToArray();
+        loaded.ColliderMeshes.Clear();
 
         for (var i = 0; i < loaded.Parts.Count; i++)
         {
-            var collider = loaded.Parts[i].AddComponent<MeshCollider>();
-            collider.sharedMesh = loaded.Meshes[i];
+            var mesh = meshes?[i];
+
+            if (mesh != null && mesh != loaded.Meshes[i])
+                loaded.ColliderMeshes.Add(mesh);
+            else
+                mesh = loaded.Meshes[i];
+
+            var collider = loaded.Parts[i].GetComponent<MeshCollider>();
+
+            if (collider == null)
+                collider = loaded.Parts[i].AddComponent<MeshCollider>();
+
+            collider.sharedMesh = mesh;
+        }
+
+        foreach (var mesh in previous)
+        {
+            if (mesh != null && !loaded.ColliderMeshes.Contains(mesh))
+                UnityEngine.Object.Destroy(mesh);
         }
 
         loaded.HasCollider = true;
+    }
+
+    private static void DestroyMeshes(Mesh[] meshes, LoadedTile loaded)
+    {
+        if (meshes == null)
+            return;
+
+        foreach (var mesh in meshes)
+        {
+            if (mesh != null && !loaded.Meshes.Contains(mesh))
+                UnityEngine.Object.Destroy(mesh);
+        }
     }
 
     public static void Destroy(LoadedTile loaded)
@@ -277,10 +363,15 @@ public sealed class TileRenderer : IDisposable
         foreach (var material in loaded.Materials)
             if (material != null) UnityEngine.Object.Destroy(material);
 
+        foreach (var mesh in loaded.ColliderMeshes)
+            if (mesh != null) UnityEngine.Object.Destroy(mesh);
+
         loaded.Parts.Clear();
         loaded.Meshes.Clear();
         loaded.Textures.Clear();
         loaded.Materials.Clear();
+        loaded.ColliderMeshes.Clear();
+        loaded.Geometry = null;
     }
 
     public void Dispose()

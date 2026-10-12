@@ -7,6 +7,7 @@ using Streety.Geo;
 using Streety.Render;
 using Streety.Services;
 using Streety.Tiles;
+using Streety.Water;
 
 using UnityEngine;
 
@@ -44,6 +45,8 @@ public sealed class StreetySession : IDisposable
     private readonly Atmosphere _atmosphere;
     private readonly SkyFog _sky;
     private readonly StreetyMusic _music;
+    private readonly WaterMap _water;
+    private readonly WaterBodies _waterBodies;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly List<Viewer> _viewers = new();
 
@@ -92,6 +95,18 @@ public sealed class StreetySession : IDisposable
         _renderer = new TileRenderer(_root.transform, template, layer) { Ground = _ground };
         var origin = new GeoOrigin(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, 0);
         _streamer = new TileStreamer(_client, _renderer, _worker, origin);
+
+        // water is an extra: without fluidlab there's nothing to swim with, so it stays solid and osm is left alone
+        if (Prefs.Water.Value && FluidLabBridge.Available)
+        {
+            _water = new WaterMap();
+            _waterBodies = new WaterBodies(layer);
+            _streamer.ColliderFilter = _water;
+        }
+        else if (Prefs.Water.Value)
+        {
+            StreetyMod.Log.Msg("fluidlab isn't installed; water stays solid");
+        }
 
         _attribution = new AttributionLabel();
         _reflections = new RigReflectionProbe();
@@ -172,7 +187,9 @@ public sealed class StreetySession : IDisposable
         UpdateGeocode();
         CollectViewers();
 
+        _water?.Update(_viewers);
         _streamer.Update(_viewers, camera);
+        _waterBodies?.Update(_water, _streamer.Origin);
 
         if (_warp == WarpPhase.Streaming)
             UpdateWarp();
@@ -180,7 +197,7 @@ public sealed class StreetySession : IDisposable
             UpdateRebase();
 
         if (Time.frameCount % 30 == 0)
-            _attribution.SetText(_streamer.BuildAttribution());
+            _attribution.SetText(BuildAttribution());
 
         _attribution.Update();
         _reflections.Update();
@@ -197,6 +214,17 @@ public sealed class StreetySession : IDisposable
 
         if (_warp == WarpPhase.None && _streamer.LastError != null && _streamer.SelectedCount == 0)
             Status = _streamer.LastError.ToLowerInvariant();
+    }
+
+    private string BuildAttribution()
+    {
+        var attribution = _streamer.BuildAttribution();
+
+        if (_water is not { HasData: true })
+            return attribution;
+
+        const string osm = "© OpenStreetMap contributors";
+        return string.IsNullOrEmpty(attribution) ? osm : $"{attribution}; {osm}";
     }
 
     private void UseRenderAssets()
@@ -371,14 +399,20 @@ public sealed class StreetySession : IDisposable
 
     private Vector3? RaycastTiles(Vector3 from, float distance)
     {
-        var hits = Physics.RaycastAll(from, Vector3.down, distance, ~0, QueryTriggerInteraction.Ignore);
+        // water surfaces are triggers, and count as ground; players arrive floating on them
+        var hits = Physics.RaycastAll(from, Vector3.down, distance, ~0, QueryTriggerInteraction.Collide);
         Vector3? best = null;
 
         foreach (var hit in hits)
         {
             var collider = hit.collider;
 
-            if (collider == null || !collider.transform.IsChildOf(_root.transform))
+            if (collider == null)
+                continue;
+
+            var ground = collider.transform.IsChildOf(_root.transform) && !collider.isTrigger;
+
+            if (!ground && _waterBodies?.IsSurface(collider) != true)
                 continue;
 
             if (_platform != null && collider.gameObject == _platform)
@@ -425,6 +459,8 @@ public sealed class StreetySession : IDisposable
         _atmosphere?.Dispose();
         _sun?.Dispose();
         _music?.Dispose();
+        _waterBodies?.Dispose();
+        _water?.Dispose();
 
         if (_root != null)
             UnityEngine.Object.Destroy(_root);

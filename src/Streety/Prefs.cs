@@ -22,6 +22,8 @@ public static class Prefs
     public static MelonPreferences_Entry<float> MusicVolume { get; private set; }
     public static MelonPreferences_Entry<float> SunHourOffset { get; private set; }
     public static MelonPreferences_Entry<float> FogVisibilityKm { get; private set; }
+    public static MelonPreferences_Entry<bool> Water { get; private set; }
+    public static MelonPreferences_Entry<string> OverpassUrls { get; private set; }
 
     public static void Initialize()
     {
@@ -53,6 +55,11 @@ public static class Prefs
             "sun hour offset", "shifts the sun's clock by this many hours; 0 = the real time at the location");
         FogVisibilityKm = _category.CreateEntry("fog_visibility_km", 0f,
             "fog visibility (km)", "how far you can see at sea level; 0 = from the region and the weather");
+        Water = _category.CreateEntry("water", true,
+            "swimmable water", "needs fluidlab; finds water from openstreetmap and lets you swim in it");
+        OverpassUrls = _category.CreateEntry("overpass_urls",
+            "https://overpass-api.de/api/interpreter, https://maps.mail.ru/osm/tools/overpass/api/interpreter, https://overpass.kumi.systems/api/interpreter, https://overpass.private.coffee/api/interpreter",
+            "overpass urls", "where openstreetmap water is looked up, first choice first; a busy one hands over to the next. results are cached for a month");
     }
 
     /// <summary>

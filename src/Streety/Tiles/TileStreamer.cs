@@ -45,6 +45,7 @@ public sealed class TileStreamer : IDisposable
     private readonly Il2CppWorker _worker;
 
     private readonly ConcurrentQueue<(Tile tile, object result, Exception error)> _completed = new();
+    private readonly ConcurrentQueue<(LoadedTile loaded, uint[][] indices)> _filtered = new();
     private readonly List<Tile> _requests = new();
     private readonly HashSet<Tile> _inFlight = new();
     private readonly List<Tile> _loaded = new();
@@ -68,6 +69,11 @@ public sealed class TileStreamer : IDisposable
     public string LastError { get; private set; }
 
     public IReadOnlyList<Tile> Selected => _selected;
+
+    /// <summary>
+    /// optional; trims tile colliders (water surfaces). collider-eligible tiles keep their cpu geometry for it.
+    /// </summary>
+    public ITileColliderFilter ColliderFilter { get; set; }
 
     public TileStreamer(TileClient client, TileRenderer renderer, Il2CppWorker worker, GeoOrigin origin)
     {
@@ -96,6 +102,7 @@ public sealed class TileStreamer : IDisposable
         _frame++;
 
         DrainCompleted();
+        DrainFiltered();
 
         if (_root == null)
         {
@@ -269,8 +276,20 @@ public sealed class TileStreamer : IDisposable
                 loaded.Root.SetActive(visible);
             }
 
-            if (visible && !loaded.ColliderRequested && loaded.Readable && WantsCollider(tile, viewers))
+            if (!visible)
+                continue;
+
+            if (!loaded.ColliderRequested)
+            {
+                if (loaded.Readable && WantsCollider(tile, viewers))
+                    RequestCollider(loaded);
+            }
+            else if (ColliderFilter != null && loaded.Geometry != null && !loaded.ColliderBusy
+                     && loaded.ColliderRevision != ColliderFilter.Revision)
+            {
+                // new water arrived since this collider was built
                 RequestCollider(loaded);
+            }
         }
     }
 
@@ -298,7 +317,74 @@ public sealed class TileStreamer : IDisposable
     {
         loaded.ColliderRequested = true;
 
-        var ids = loaded.Meshes.Select(m => m.GetInstanceID()).ToArray();
+        var filter = ColliderFilter;
+        var geometry = loaded.Geometry;
+
+        if (filter == null || geometry == null)
+        {
+            BakeColliders(loaded, null);
+            return;
+        }
+
+        loaded.ColliderBusy = true;
+        loaded.ColliderRevision = filter.Revision;
+
+        var models = loaded.PartMatrices.ToArray();
+
+        Task.Run(() =>
+        {
+            uint[][] indices = null;
+
+            try
+            {
+                indices = filter.Filter(geometry, models);
+            }
+            catch (Exception e)
+            {
+                StreetyMod.Log.Warning($"collider filter failed: {e.Message}");
+            }
+
+            _filtered.Enqueue((loaded, indices));
+        });
+    }
+
+    private void DrainFiltered()
+    {
+        while (_filtered.TryDequeue(out var item))
+        {
+            var (loaded, indices) = item;
+
+            if (loaded.Root == null || loaded.Geometry == null)
+                continue;
+
+            // already built and still unfiltered: nothing to change
+            if (indices == null && loaded.HasCollider && loaded.ColliderMeshes.Count == 0)
+            {
+                loaded.ColliderBusy = false;
+                continue;
+            }
+
+            Mesh[] meshes = null;
+
+            if (indices != null)
+            {
+                meshes = new Mesh[loaded.Parts.Count];
+
+                for (var i = 0; i < meshes.Length; i++)
+                {
+                    meshes[i] = indices[i] != null
+                        ? _renderer.CreateColliderMesh(loaded.Geometry.Nodes[i], indices[i])
+                        : loaded.Meshes[i];
+                }
+            }
+
+            BakeColliders(loaded, meshes);
+        }
+    }
+
+    private void BakeColliders(LoadedTile loaded, Mesh[] meshes)
+    {
+        var ids = (meshes ?? loaded.Meshes.ToArray()).Select(m => m.GetInstanceID()).ToArray();
 
         _worker.Enqueue(
             () =>
@@ -306,7 +392,11 @@ public sealed class TileStreamer : IDisposable
                 foreach (var id in ids)
                     Physics.BakeMesh(id, false);
             },
-            () => TileRenderer.AddColliders(loaded));
+            () =>
+            {
+                TileRenderer.SetColliders(loaded, meshes);
+                loaded.ColliderBusy = false;
+            });
     }
 
     private void CancelStale()
@@ -479,6 +569,14 @@ public sealed class TileStreamer : IDisposable
                 var keepReadable = tile.GeometricError <= ReadableMaxError || tile.IsLeaf;
                 tile.Loaded = _renderer.Create(tile, tile.Pending, Origin, keepReadable);
                 tile.State = TileState.Ready;
+
+                if (ColliderFilter != null && keepReadable && (tile.GeometricError <= ColliderMaxError || tile.IsLeaf))
+                {
+                    // the filter only needs the meshes; the images are already on the gpu
+                    tile.Pending.Images.Clear();
+                    tile.Loaded.Geometry = tile.Pending;
+                    tile.Loaded.Bytes += tile.Pending.EstimatedBytes;
+                }
 
                 LoadedBytes += tile.Loaded.Bytes;
                 _loaded.Add(tile);
