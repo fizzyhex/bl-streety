@@ -44,6 +44,7 @@
     <Reference Include="UnityEngine" HintPath="$(Il2CppAssemblies)\UnityEngine.dll" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(Il2CppAssemblies)\UnityEngine.CoreModule.dll" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(Il2CppAssemblies)\UnityEngine.PhysicsModule.dll" />
+    <Reference Include="UnityEngine.AIModule" HintPath="$(Il2CppAssemblies)\UnityEngine.AIModule.dll" />
     <Reference Include="UnityEngine.AudioModule" HintPath="$(Il2CppAssemblies)\UnityEngine.AudioModule.dll" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(Il2CppAssemblies)\UnityEngine.ImageConversionModule.dll" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(Il2CppAssemblies)\UnityEngine.TextRenderingModule.dll" />

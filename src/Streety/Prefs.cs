@@ -24,6 +24,8 @@ public static class Prefs
     public static MelonPreferences_Entry<float> FogVisibilityKm { get; private set; }
     public static MelonPreferences_Entry<bool> Water { get; private set; }
     public static MelonPreferences_Entry<string> OverpassUrls { get; private set; }
+    public static MelonPreferences_Entry<bool> NavMesh { get; private set; }
+    public static MelonPreferences_Entry<float> NavMeshRadius { get; private set; }
 
     public static void Initialize()
     {
@@ -60,6 +62,10 @@ public static class Prefs
         OverpassUrls = _category.CreateEntry("overpass_urls",
             "https://overpass-api.de/api/interpreter, https://maps.mail.ru/osm/tools/overpass/api/interpreter, https://overpass.kumi.systems/api/interpreter, https://overpass.private.coffee/api/interpreter",
             "overpass urls", "where openstreetmap water is looked up, first choice first; a busy one hands over to the next. results are cached for a month");
+        NavMesh = _category.CreateEntry("navmesh", true,
+            "npc navmesh", "bakes walkable ground around each player so npcs can move");
+        NavMeshRadius = _category.CreateEntry("navmesh_radius", 100f,
+            "navmesh radius (m)", "how far around a player npcs can walk; keep it within the collider radius");
     }
 
     /// <summary>

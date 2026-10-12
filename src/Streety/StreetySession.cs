@@ -47,8 +47,10 @@ public sealed class StreetySession : IDisposable
     private readonly StreetyMusic _music;
     private readonly WaterMap _water;
     private readonly WaterBodies _waterBodies;
+    private readonly TileNavMesh _navMesh;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly List<Viewer> _viewers = new();
+    private readonly List<Vector3> _rigs = new();
 
     private WarpPhase _warp;
     private string _warpName;
@@ -108,6 +110,9 @@ public sealed class StreetySession : IDisposable
             StreetyMod.Log.Msg("fluidlab isn't installed; water stays solid");
         }
 
+        if (Prefs.NavMesh.Value)
+            _navMesh = new TileNavMesh(_streamer);
+
         _attribution = new AttributionLabel();
         _reflections = new RigReflectionProbe();
         _sun = new SunDriver();
@@ -151,6 +156,7 @@ public sealed class StreetySession : IDisposable
 
         // a new place: nothing loaded is useful any more
         _streamer.UnloadAll();
+        _navMesh?.Reset();
         _ground.Reset();
         _streamer.SetOrigin(new GeoOrigin(latitude, longitude, 0));
 
@@ -190,6 +196,10 @@ public sealed class StreetySession : IDisposable
         _water?.Update(_viewers);
         _streamer.Update(_viewers, camera);
         _waterBodies?.Update(_water, _streamer.Origin);
+
+        // nothing to walk on while waiting on the platform
+        if (_warp == WarpPhase.None)
+            _navMesh?.Update(_rigs);
 
         if (_warp == WarpPhase.Streaming)
             UpdateWarp();
@@ -283,6 +293,7 @@ public sealed class StreetySession : IDisposable
     private void CollectViewers()
     {
         _viewers.Clear();
+        _rigs.Clear();
 
         var radius = Prefs.ColliderRadius.Value;
         var origin = _streamer.Origin;
@@ -301,6 +312,8 @@ public sealed class StreetySession : IDisposable
                 Ecef = origin.UnityToEcef(head.position),
                 ColliderRadius = radius,
             });
+
+            _rigs.Add(head.position);
         }
 
         if (_warp == WarpPhase.Streaming)
@@ -449,6 +462,7 @@ public sealed class StreetySession : IDisposable
     {
         _lifetime.Cancel();
 
+        _navMesh?.Dispose();
         _streamer?.Dispose();
         _worker?.Dispose();
         _client?.Dispose();

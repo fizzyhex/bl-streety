@@ -70,6 +70,13 @@ public sealed class TileStreamer : IDisposable
 
     public IReadOnlyList<Tile> Selected => _selected;
 
+    public IReadOnlyList<Tile> Loaded => _loaded;
+
+    /// <summary>
+    /// changes whenever a tile collider is added, swapped or removed.
+    /// </summary>
+    public int ColliderRevision { get; private set; }
+
     /// <summary>
     /// optional; trims tile colliders (water surfaces). collider-eligible tiles keep their cpu geometry for it.
     /// </summary>
@@ -396,6 +403,7 @@ public sealed class TileStreamer : IDisposable
             {
                 TileRenderer.SetColliders(loaded, meshes);
                 loaded.ColliderBusy = false;
+                ColliderRevision++;
             });
     }
 
@@ -638,6 +646,10 @@ public sealed class TileStreamer : IDisposable
         if (tile.Loaded != null)
         {
             LoadedBytes -= tile.Loaded.Bytes;
+
+            if (tile.Loaded.HasCollider)
+                ColliderRevision++;
+
             TileRenderer.Destroy(tile.Loaded);
             tile.Loaded = null;
         }
