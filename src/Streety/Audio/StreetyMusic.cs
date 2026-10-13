@@ -12,10 +12,9 @@ namespace Streety.Audio;
 /// layered terrain music, loaded from the streety pallet's monodiscs.
 /// </summary>
 /// <remarks>
-/// the base track loops whenever an area is loaded. the flying stems loop alongside it, sample-locked to the base,
-/// and crossfade in and out with how hard the player is moving: hovering with the nimbus gun or idling in a vehicle
-/// brings in 1x (settling back to the base after a while), flying or throttling swaps it for 2x. everything goes through bonelab's non-diegetic music mixer,
-/// so the game's music volume applies.
+/// the base track loops while an area is loaded. two flying stems loop alongside it, sample-locked, and fade in with movement:
+/// 1x for hovering or idling in a vehicle (settles back to base after a while), 2x for flying or throttling.
+/// routed through bonelab's non-diegetic music mixer, so the game's music volume applies.
 /// </remarks>
 public sealed class StreetyMusic : IDisposable
 {

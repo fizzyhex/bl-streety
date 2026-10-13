@@ -12,9 +12,9 @@ namespace Streety.Movement;
 /// speeds the nimbus gun up the higher the player flies, so crossing a city from the clouds doesn't take forever.
 /// </summary>
 /// <remarks>
-/// the boost grows exponentially from <see cref="FloorHeight"/> up to the ceiling pref, then holds. only guns held by
-/// the local rig are touched; with fusion, every player boosts their own gun from their own height, and the gun's
-/// physics is driven by whoever holds it. a gun gets its own speed back as soon as it's let go.
+/// the boost grows exponentially from <see cref="FloorHeight"/> up to the ceiling pref, then holds.
+/// only guns held by the local rig are boosted.
+/// a gun gets its base speed back as soon as it's let go.
 /// </remarks>
 public sealed class NimbusBoost : IDisposable
 {
