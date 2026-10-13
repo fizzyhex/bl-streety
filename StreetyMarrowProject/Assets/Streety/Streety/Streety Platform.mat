@@ -20,7 +20,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Streety Ground
+  m_Name: Streety Platform
   m_Shader: {fileID: 4800000, guid: e2bc12b142787a84e95ff4f3ca0bac39, type: 3}
   m_ValidKeywords:
   - _DETAILS_ON

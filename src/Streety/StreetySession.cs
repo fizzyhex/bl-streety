@@ -75,6 +75,12 @@ public sealed class StreetySession : IDisposable
 
     public bool IsWarping => _warp != WarpPhase.None;
 
+    /// <summary>
+    /// whether an area's streamed in and the player's been put down on it; false before the first arrival, and
+    /// again from the moment a warp throws the old area away.
+    /// </summary>
+    public bool HasGround => _arrived;
+
     public NimbusBoost Nimbus => _nimbus;
 
     public SunDriver Sun => _sun;
