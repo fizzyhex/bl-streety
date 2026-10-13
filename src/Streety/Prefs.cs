@@ -4,6 +4,11 @@ namespace Streety;
 
 public static class Prefs
 {
+    /// <summary>
+    /// what a pasted key starts with; tolerated in the pref too, since it's easy to paste the whole thing there.
+    /// </summary>
+    public const string MapsKeyPrefix = "mapskey:";
+
     private static MelonPreferences_Category _category;
 
     public static MelonPreferences_Entry<string> MapsKey { get; private set; }
@@ -82,7 +87,7 @@ public static class Prefs
     /// </summary>
     public static string ResolveMapsKey()
     {
-        var key = MapsKey.Value?.Trim();
+        var key = StripMapsKeyPrefix(MapsKey.Value);
 
         if (!string.IsNullOrEmpty(key))
             return key;
@@ -104,9 +109,23 @@ public static class Prefs
             if (split < 0)
                 continue;
 
-            return trimmed[(split + 1)..].Trim().Trim('"');
+            var value = StripMapsKeyPrefix(trimmed[(split + 1)..].Trim().Trim('"'));
+            return string.IsNullOrEmpty(value) ? null : value;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// trims <paramref name="value"/> and drops a leading <see cref="MapsKeyPrefix"/>, if it has one.
+    /// </summary>
+    public static string StripMapsKeyPrefix(string value)
+    {
+        var key = value?.Trim();
+
+        if (key != null && key.StartsWith(MapsKeyPrefix, StringComparison.OrdinalIgnoreCase))
+            key = key[MapsKeyPrefix.Length..].Trim();
+
+        return key;
     }
 }

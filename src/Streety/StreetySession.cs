@@ -42,6 +42,9 @@ public sealed class StreetySession : IDisposable
     private const float LeaveSeconds = 0.25f;
     private const float ArriveGraceSeconds = 1f;
 
+    private const string KeyRejectedStatus = "maps key rejected; check it has the map tiles api enabled, or paste mapskey:<key>";
+    private static readonly List<Viewer> NoViewers = new();
+
     private readonly GameObject _root;
     private readonly TileClient _client;
     private readonly Geocoder _geocoder;
@@ -121,7 +124,7 @@ public sealed class StreetySession : IDisposable
 
         if (string.IsNullOrEmpty(key))
         {
-            Status = "no maps key; set maps_key in UserData/MelonPreferences.cfg";
+            Status = "no maps key; paste mapskey:<key> into the game, or set maps_key in UserData/MelonPreferences.cfg";
             StreetyMod.Log.Error(Status);
             return;
         }
@@ -175,6 +178,12 @@ public sealed class StreetySession : IDisposable
         if (_streamer == null)
             return;
 
+        if (_streamer.KeyRejected)
+        {
+            Status = KeyRejectedStatus;
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(query))
         {
             Status = "type a location first";
@@ -222,6 +231,20 @@ public sealed class StreetySession : IDisposable
 
         if (_pendingStart)
         {
+            // nobody gets lifted to the wait platform until google's handed over the tileset; a bad key leaves
+            // players where the level spawned them
+            if (!_streamer.HasRoot)
+            {
+                _streamer.Update(NoViewers, null);
+
+                if (_streamer.KeyRejected)
+                    Status = KeyRejectedStatus;
+                else if (_streamer.LastError != null)
+                    Status = _streamer.LastError.ToLowerInvariant();
+
+                return;
+            }
+
             // wait for streety's materials too, so no tile gets drawn with the fallback
             if (Player.RigManager == null || !_renderAssets.Settled)
                 return;

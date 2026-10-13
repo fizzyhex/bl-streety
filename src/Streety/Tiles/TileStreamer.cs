@@ -40,6 +40,10 @@ public sealed class TileStreamer : IDisposable
 
     private const int UnusedJsonFrames = 3600;
 
+    // root.json retries back off from this, doubling up to the max
+    private const float RootRetrySeconds = 2f;
+    private const float RootRetryMaxSeconds = 60f;
+
     private readonly TileClient _client;
     private readonly TileRenderer _renderer;
     private readonly Il2CppWorker _worker;
@@ -57,6 +61,8 @@ public sealed class TileStreamer : IDisposable
 
     private Tile _root;
     private bool _rootLoading;
+    private int _rootFailures;
+    private float _rootRetryAt;
     private int _frame;
     private float _sseFactor = 1000f;
 
@@ -67,6 +73,13 @@ public sealed class TileStreamer : IDisposable
     public int InFlightCount => _inFlight.Count;
     public int UploadQueueCount => _uploadQueue.Count;
     public string LastError { get; private set; }
+
+    public bool HasRoot => _root != null;
+
+    /// <summary>
+    /// google turned the key down when asked for root.json; retrying won't help until the key changes.
+    /// </summary>
+    public bool KeyRejected { get; private set; }
 
     public IReadOnlyList<Tile> Selected => _selected;
 
@@ -141,7 +154,7 @@ public sealed class TileStreamer : IDisposable
 
     private void EnsureRoot()
     {
-        if (_rootLoading)
+        if (_rootLoading || KeyRejected || Time.time < _rootRetryAt)
             return;
 
         _rootLoading = true;
@@ -160,6 +173,15 @@ public sealed class TileStreamer : IDisposable
                 _completed.Enqueue((null, null, e));
             }
         }, token);
+    }
+
+    /// <summary>
+    /// 400 is an invalid key, 401/403 a key without the map tiles api (or billing) behind it.
+    /// </summary>
+    private static bool IsKeyRejection(Exception error)
+    {
+        return error is System.Net.Http.HttpRequestException { StatusCode: { } status }
+            && (int)status is 400 or 401 or 403;
     }
 
     private void RefreshSession()
@@ -507,11 +529,24 @@ public sealed class TileStreamer : IDisposable
 
                 if (error != null)
                 {
+                    if (IsKeyRejection(error))
+                    {
+                        KeyRejected = true;
+                        LastError = "maps key rejected";
+                        StreetyMod.Log.Error($"maps key rejected: {error.Message}");
+                        continue;
+                    }
+
+                    _rootFailures++;
+                    var backoff = Math.Min(RootRetryMaxSeconds, RootRetrySeconds * (1 << Math.Min(_rootFailures - 1, 8)));
+                    _rootRetryAt = Time.time + backoff;
                     LastError = $"couldn't reach google tiles: {error.Message}";
-                    StreetyMod.Log.Error(LastError);
+                    StreetyMod.Log.Error($"{LastError}; retrying in {backoff:F0}s");
                     continue;
                 }
 
+                _rootFailures = 0;
+                LastError = null;
                 _root = (Tile)result;
                 StreetyMod.Log.Msg($"tiles root loaded ({_root.Children.Count} children)");
                 continue;

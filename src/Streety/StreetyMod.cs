@@ -43,7 +43,23 @@ public class StreetyMod : MelonMod
             return;
 
         Log.Msg($"starting session in {level.title}");
+        StartSession();
+    }
 
+    /// <summary>
+    /// throws the running session away and starts a fresh one in the same level, e.g. once the maps key changes.
+    /// </summary>
+    public static void RestartSession()
+    {
+        if (Session == null)
+            return;
+
+        EndSession();
+        StartSession();
+    }
+
+    private static void StartSession()
+    {
         try
         {
             Session = new StreetySession();
@@ -78,6 +94,15 @@ public class StreetyMod : MelonMod
             Log.Error(e);
         }
 #endif
+        try
+        {
+            Services.MapsKeyPaste.Update();
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
+
         try
         {
             Session?.Update();
