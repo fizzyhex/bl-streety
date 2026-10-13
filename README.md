@@ -16,6 +16,7 @@ and we got:
 
 > [!NOTE]
 > **RAM Requirements**
+> 
 > Streety defaults to a 2GB ram allowance to allow it to handle dense areas! Make sure you have some headroom before jumping in.
 
 ---
