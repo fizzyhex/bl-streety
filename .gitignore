@@ -131,3 +131,9 @@ src/**/bin/
 src/**/obj/
 .vs/
 *.user
+
+# amplify shader editor is a paid asset, we shouldn't distribute it
+StreetyMarrowProject/Assets/AmplifyShaderEditor/
+StreetyMarrowProject/Assets/AmplifyShaderEditor.meta
+StreetyMarrowProject/ProjectSettings/AmplifyShaderEditor.asset
+StreetyMarrowProject/ProjectSettings/AmplifyShaderEditor.asset.meta
