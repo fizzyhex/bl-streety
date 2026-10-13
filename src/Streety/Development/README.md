@@ -1,6 +1,6 @@
 # Optional BONELAB MCP adapter
 
-Build with `-p:EnableBonelabMcpAdapter=true` to include `streety_warp` and `streety_status`. Normal builds exclude the adapter and have no reference to `BonelabMcp.Contracts`.
+Debug builds include `streety_warp` and `streety_status` by default when the helper repository is found; opt out with `-p:EnableBonelabMcpAdapter=false`, or force it on for other configurations with `-p:EnableBonelabMcpAdapter=true`. If the helper is missing, debug builds warn and build without the adapter. Release builds exclude the adapter and have no reference to `BonelabMcp.Contracts`.
 
 The default helper location is the sibling `bonelab-mcp` repository; override `BonelabMcpRoot` when needed. Build with `-p:DeployToGame=false` for checks that must not replace the installed Streety DLL. Install a development build explicitly with BONELAB closed, alongside the helper bridge and its contracts in `UserLibs`.
 

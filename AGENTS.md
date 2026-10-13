@@ -21,3 +21,5 @@ Features that concern the rig and changing of world state should make considerat
 https://github.com/Lakatrazz/BONELAB-Fusion
 
 Level events can be synchronised using RPC Variables / RPC Events. Features should account for the possibility of multiple rigs owned by other players being able to co-exist.
+
+Maintain compatibility with singleplayer for users who aren't using Fusion, or don't have it installed.

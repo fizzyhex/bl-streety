@@ -14,13 +14,22 @@
     <DeployToGame Condition="'$(DeployToGame)' == ''">true</DeployToGame>
   </PropertyGroup>
 
+  <!-- mcp adapter is on by default for debug builds; opt out with -p:EnableBonelabMcpAdapter=false -->
+  <PropertyGroup>
+    <BonelabMcpRoot Condition="'$(BonelabMcpRoot)' == ''">$(MSBuildProjectDirectory)\..\..\..\bonelab-mcp</BonelabMcpRoot>
+    <BonelabMcpContracts>$(BonelabMcpRoot)\src\BonelabMcp.Contracts\BonelabMcp.Contracts.csproj</BonelabMcpContracts>
+    <BonelabMcpAdapterMissing Condition="'$(EnableBonelabMcpAdapter)' == '' And '$(Configuration)' == 'Debug' And !Exists('$(BonelabMcpContracts)')">true</BonelabMcpAdapterMissing>
+    <EnableBonelabMcpAdapter Condition="'$(EnableBonelabMcpAdapter)' == '' And '$(Configuration)' == 'Debug' And Exists('$(BonelabMcpContracts)')">true</EnableBonelabMcpAdapter>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(EnableBonelabMcpAdapter)' == 'true'">
     <DefineConstants>$(DefineConstants);BONELAB_MCP_ADAPTER</DefineConstants>
-    <BonelabMcpRoot Condition="'$(BonelabMcpRoot)' == ''">$(MSBuildProjectDirectory)\..\..\..\bonelab-mcp</BonelabMcpRoot>
   </PropertyGroup>
   <ItemGroup Condition="'$(EnableBonelabMcpAdapter)' == 'true'">
-    <ProjectReference Include="$(BonelabMcpRoot)\src\BonelabMcp.Contracts\BonelabMcp.Contracts.csproj" Private="false" />
+    <ProjectReference Include="$(BonelabMcpContracts)" Private="false" />
   </ItemGroup>
+  <Target Name="WarnBonelabMcpMissing" BeforeTargets="Build" Condition="'$(BonelabMcpAdapterMissing)' == 'true'">
+    <Warning Text="bonelab-mcp not found at $(BonelabMcpRoot); building without the mcp adapter. set BonelabMcpRoot, or -p:EnableBonelabMcpAdapter=false to silence." />
+  </Target>
 
   <ItemDefinitionGroup>
     <Reference>

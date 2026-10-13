@@ -69,7 +69,14 @@ public class StreetyMod : MelonMod
     public override void OnUpdate()
     {
 #if BONELAB_MCP_ADAPTER
-        Development.McpAdapterBootstrap.Update();
+        try
+        {
+            Development.McpAdapterBootstrap.Update();
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+        }
 #endif
         try
         {
