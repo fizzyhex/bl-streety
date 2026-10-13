@@ -26,4 +26,8 @@ Maintain compatibility with singleplayer for users who aren't using Fusion, or d
 
 ## README
 
-The README.md is user-facing, and should avoid inducing information overload through implementation rundowns, and things better seen in the source code. Avoid adding to it unless asked, or if information is invalidated by changes. 
+The README.md is user-facing, and should avoid inducing information overload through implementation rundowns, and things better seen in the source code. Avoid adding to it unless asked, or if information is invalidated by changes.
+
+## Tonality in Code Comments and Summaries
+
+Keep code comments and documentation grounded, natural, and technically precise. Prefer describing what the code does, why it exists, or what constraints it enforces over narrating its behaviour through metaphors, personification, or dramatic phrasing. Avoid overly stylised, aphoristic, or authoritative language that sounds more like storytelling than engineering documentation. A conversational tone is fine, but comments should read like something a thoughtful developer would write for another developer. Don't overcorrect into rigid formality, and avoid comments that merely restate the code.

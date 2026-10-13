@@ -5,7 +5,8 @@ namespace Streety;
 public static class Prefs
 {
     /// <summary>
-    /// what a pasted key starts with; tolerated in the pref too, since it's easy to paste the whole thing there.
+    /// prefix for pasted keys.
+    /// this should be accounted for anywhere a user can paste a key, as it may be included by 'mistake'.
     /// </summary>
     public const string MapsKeyPrefix = "mapskey:";
 
@@ -34,6 +35,7 @@ public static class Prefs
     public static MelonPreferences_Entry<bool> NimbusBoost { get; private set; }
     public static MelonPreferences_Entry<float> NimbusBoostMax { get; private set; }
     public static MelonPreferences_Entry<float> NimbusBoostCeiling { get; private set; }
+    public static MelonPreferences_Entry<string> TravelPermission { get; private set; }
 
     public static void Initialize()
     {
@@ -80,6 +82,9 @@ public static class Prefs
             "nimbus max boost", "speed multiplier at the boost ceiling; it ramps up exponentially on the way");
         NimbusBoostCeiling = _category.CreateEntry("nimbus_boost_ceiling", 5000f,
             "nimbus boost ceiling (m)", "height above the ground where the boost stops growing");
+        TravelPermission = _category.CreateEntry("travel_permission", "operator",
+            "travel permission", "when you host: who can travel straight away instead of sending a request " +
+            "(host, operator, owner or everyone)");
     }
 
     /// <summary>

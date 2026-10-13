@@ -63,6 +63,8 @@
     <Reference Include="Unity.RenderPipelines.Universal.Runtime" HintPath="$(Il2CppAssemblies)\Unity.RenderPipelines.Universal.Runtime.dll" />
 
     <Reference Include="BoneLib" HintPath="$(BONELAB_DIR)\Mods\BoneLib.dll" />
+    <!-- optional! -->
+    <Reference Include="LabFusion" HintPath="$(BONELAB_DIR)\Mods\LabFusion.dll" />
   </ItemGroup>
 
   <!-- components shared with the sdk project; registered in il2cpp so bundles resolve them by name -->

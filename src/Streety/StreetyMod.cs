@@ -6,6 +6,7 @@ using Streety;
 [assembly: MelonInfo(typeof(StreetyMod), StreetyMod.Name, StreetyMod.Version, StreetyMod.Author)]
 [assembly: MelonGame("Stress Level Zero", "BONELAB")]
 [assembly: MelonAdditionalDependencies("BoneLib")]
+[assembly: MelonOptionalDependencies("LabFusion")]
 
 namespace Streety;
 
@@ -30,6 +31,7 @@ public class StreetyMod : MelonMod
 
         Prefs.Initialize();
         Menu.StreetyMenu.Create();
+        Multiplayer.FusionBridge.Initialize();
 
         Hooking.OnLevelLoaded += OnLevelLoaded;
         Hooking.OnLevelUnloaded += OnLevelUnloaded;

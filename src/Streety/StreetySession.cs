@@ -5,6 +5,7 @@ using Il2CppSLZ.Marrow;
 using Streety.Audio;
 using Streety.Geo;
 using Streety.Movement;
+using Streety.Multiplayer;
 using Streety.Render;
 using Streety.Services;
 using Streety.Tiles;
@@ -15,7 +16,7 @@ using UnityEngine;
 namespace Streety;
 
 /// <summary>
-/// everything streety does while the streety level is loaded: streaming, warping, origin shifts, attribution.
+/// high-level state container for the loaded streety level.
 /// </summary>
 public sealed class StreetySession : IDisposable
 {
@@ -32,17 +33,19 @@ public sealed class StreetySession : IDisposable
     private const float SettleSeconds = 1f;
     private const float WarpTimeout = 45f;
 
-    // arrivals land on the safety platform, perched off to the side of the target, until they step off
+    // how long a joining client waits to be told where the lobby is before it falls back to the default start
+    private const float HostWaitSeconds = 20f;
+
     private const float PerchDistance = 80f;
     private const float PerchHeight = 12f;
     private const float PerchFootprint = 12f;
     private const int PerchBearings = 8;
 
-    // how long the local player has to be off the platform before it's let go; rides out teleport flicker
+    // how long the local player has to be off the platform before it vanishes
     private const float LeaveSeconds = 0.25f;
     private const float ArriveGraceSeconds = 1f;
 
-    private const string KeyRejectedStatus = "maps key rejected; check it has the map tiles api enabled, or paste mapskey:<key>";
+    private const string KeyRejectedStatus = "maps key rejected! check it has the map tiles api enabled, or focus BONELAB and paste mapskey:<key>";
     private static readonly List<Viewer> NoViewers = new();
 
     private readonly GameObject _root;
@@ -77,6 +80,8 @@ public sealed class StreetySession : IDisposable
     private Vector3? _probeHit;
     private float _probeStableSince;
     private bool _pendingStart;
+    private (double Latitude, double Longitude, string Name)? _startOverride;
+    private float? _hostWaitSince;
     private bool _arrived;
     private float _arrivedAt;
     private Double3 _platformEcef;
@@ -86,31 +91,39 @@ public sealed class StreetySession : IDisposable
     private float _offPlatformSince;
     private Camera _camera;
 
-    /// <summary>
-    /// lower-case status line for the menu; location names keep their case.
-    /// </summary>
-    public string Status { get; private set; } = "starting…";
+    public string Status { get; private set; } = "starting...";
 
     public string LocationName { get; private set; }
 
     public bool IsWarping => _warp != WarpPhase.None;
 
     /// <summary>
-    /// whether an area's streamed in and the player's been put down on it; false before the first arrival, and
-    /// again from the moment a warp throws the old area away.
+    /// Whether an area has been streamed in and the player has arrived there. False before the first arrival and
+    /// again once a warp discards the previous area.
     /// </summary>
     public bool HasGround => _arrived;
 
     /// <summary>
-    /// whether the safety platform should be out: while there's no ground, and after arriving until the local
-    /// player steps off it.
+    /// Whether the safety platform should be present: before ground is available and after arrival until the local
+    /// player steps off the platform.
     /// </summary>
     public bool PlatformNeeded => !_arrived || _perched;
 
     /// <summary>
-    /// where the top of the safety platform belongs, in unity space; null until the first warp places it.
+    /// The top surface of the safety platform in Unity space, or null until the first warp places it.
     /// </summary>
     public Vector3? PlatformSurface => _hasPlatform ? _streamer.Origin.EcefToUnity(_platformEcef) : null;
+
+    /// <summary>
+    /// Whether a warp target has been set and can be sent to late joiners.
+    /// </summary>
+    public bool HasTarget => _warpName != null;
+
+    public double TargetLatitude => _warpLat;
+
+    public double TargetLongitude => _warpLon;
+
+    public string TargetName => _warpName;
 
     public NimbusBoost Nimbus => _nimbus;
 
@@ -141,7 +154,7 @@ public sealed class StreetySession : IDisposable
         var origin = new GeoOrigin(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, 0);
         _streamer = new TileStreamer(_client, _renderer, _worker, origin);
 
-        // water is an extra: without fluidlab there's nothing to swim with, so it stays solid and osm is left alone
+        // Water requires FluidLab; without it, water remains solid and the OSM terrain is left unchanged.
         if (Prefs.Water.Value && FluidLabBridge.Available)
         {
             _water = new WaterMap();
@@ -166,14 +179,43 @@ public sealed class StreetySession : IDisposable
         _nimbus = new NimbusBoost();
         _pin = new LocationPin(_root.transform);
 
-        // the rig may not exist yet during level load; the first warp starts once it does
+        // Defer warping until after rig/level load
         _pendingStart = true;
+
+        // If sent before the session begun, pop the pending level request from the host
+        if (FusionBridge.TakePending(out var lat, out var lon, out var name))
+            _startOverride = (lat, lon, name);
     }
 
     /// <summary>
-    /// geocodes a place name and warps every local player there.
+    /// Geocodes a place name and warps warps to it, or sends a travel request to host.
     /// </summary>
     public void WarpTo(string query)
+    {
+        if (_streamer == null)
+            return;
+
+        if (FusionBridge.IsClient)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                Status = "type a location first";
+                return;
+            }
+
+            Status = FusionBridge.RequestTravel(query.Trim())
+                ? "asked the host to travel"
+                : "couldn't reach the host";
+            return;
+        }
+
+        WarpToLocal(query);
+    }
+
+    /// <summary>
+    /// Geocodes place name and warps to it.
+    /// </summary>
+    public void WarpToLocal(string query)
     {
         if (_streamer == null)
             return;
@@ -195,7 +237,25 @@ public sealed class StreetySession : IDisposable
         Status = "looking up location…";
     }
 
-    private void BeginWarp(double latitude, double longitude, string name)
+    /// <summary>
+    /// Follows the host to an already-resolved location without geocoding or announcing it back.
+    /// </summary>
+    public void WarpToResolved(double latitude, double longitude, string name)
+    {
+        if (_streamer == null)
+            return;
+
+        // still waiting on the first warp: this is the start
+        if (_pendingStart)
+        {
+            _startOverride = (latitude, longitude, name);
+            return;
+        }
+
+        BeginWarp(latitude, longitude, name, false);
+    }
+
+    private void BeginWarp(double latitude, double longitude, string name, bool announce = true)
     {
         _warpLat = latitude;
         _warpLon = longitude;
@@ -207,7 +267,7 @@ public sealed class StreetySession : IDisposable
         _perched = false;
         _pin.Hide(true);
 
-        // a new place: nothing loaded is useful any more
+        // reset state
         _streamer.UnloadAll();
         _navMesh?.Reset();
         _ground.Reset();
@@ -220,6 +280,10 @@ public sealed class StreetySession : IDisposable
 
         Status = $"loading tiles for {name}…";
         StreetyMod.Log.Msg($"warping to {name} {_streamer.Origin}");
+
+        // existing players follow immediately while their surrounding tiles stream in.
+        if (announce)
+            FusionBridge.Announce(latitude, longitude, name);
     }
 
     public void Update()
@@ -231,8 +295,8 @@ public sealed class StreetySession : IDisposable
 
         if (_pendingStart)
         {
-            // nobody gets lifted to the wait platform until google's handed over the tileset; a bad key leaves
-            // players where the level spawned them
+            // Do not move players to the wait platform until the tile set is available. An invalid key leaves
+            // them at their level spawn positions.
             if (!_streamer.HasRoot)
             {
                 _streamer.Update(NoViewers, null);
@@ -245,13 +309,31 @@ public sealed class StreetySession : IDisposable
                 return;
             }
 
-            // wait for streety's materials too, so no tile gets drawn with the fallback
+            // Wait for Streety's materials so tiles are not rendered with the fallback assets.
             if (Player.RigManager == null || !_renderAssets.Settled)
                 return;
 
+            // When joining another player's lobby, wait briefly for the host to provide the current location.
+            if (_startOverride == null && FusionBridge.IsClient)
+            {
+                _hostWaitSince ??= Time.time;
+
+                if (Time.time - _hostWaitSince < HostWaitSeconds)
+                {
+                    Status = "waiting for the host…";
+                    return;
+                }
+
+                StreetyMod.Log.Warning("the host didn't say where to start; using the default");
+            }
+
             _pendingStart = false;
             UseRenderAssets();
-            BeginWarp(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, Prefs.StartName.Value);
+
+            if (_startOverride is var (lat, lon, name))
+                BeginWarp(lat, lon, name, false);
+            else
+                BeginWarp(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, Prefs.StartName.Value);
         }
 
         var camera = FindCamera();
@@ -266,7 +348,7 @@ public sealed class StreetySession : IDisposable
         _streamer.Update(_viewers, camera);
         _waterBodies?.Update(_water, _streamer.Origin);
 
-        // nothing to walk on while waiting on the platform
+        // The nav mesh is not useful while the player is waiting on the platform.
         if (_warp == WarpPhase.None)
             _navMesh?.Update(_rigs);
 
@@ -283,7 +365,7 @@ public sealed class StreetySession : IDisposable
         _attribution.Update();
         _reflections.Update();
 
-        // sun first, then the air it lights; the sky cubemap re-renders from wherever they ended up
+        // Update the sun before the atmosphere so the sky cubemap reflects the latest lighting state.
         var eye = camera != null ? camera.transform.position : Vector3.zero;
         _sun.Update(_streamer.Origin);
         _atmosphere.Update(_streamer.Origin, _sun, _ground, eye);
@@ -291,7 +373,7 @@ public sealed class StreetySession : IDisposable
         _sky.Update(_atmosphere.Revision, eye);
         _pin.Update(_streamer.Origin, eye);
 
-        // music plays once an area's loaded, not while waiting on the platform
+        // Start music after the area loads, not while the player is waiting on the platform.
         _music.Update(_arrived);
 
         _nimbus.Update(_streamer.Origin);
@@ -372,7 +454,7 @@ public sealed class StreetySession : IDisposable
         var radius = Prefs.ColliderRadius.Value;
         var origin = _streamer.Origin;
 
-        // every live rig, local or remote (fusion), streams the world around it
+        // Stream the world around every live local or remote Fusion rig.
         foreach (var rigs in RigManager.Cache._cache.Values)
         foreach (var rig in rigs)
         {
@@ -392,7 +474,7 @@ public sealed class StreetySession : IDisposable
 
         if (_warp == WarpPhase.Streaming)
         {
-            // stream the ground under the target in full detail, wherever the player is waiting
+            // Stream the ground below the target in full detail while the player waits.
             var probeHeight = _probeHit?.y + 1.7f ?? 0f;
 
             _viewers.Add(new Viewer
@@ -441,10 +523,10 @@ public sealed class StreetySession : IDisposable
 
     private void FinishWarp(Vector3 ground)
     {
-        // pick the perch while the colliders are still where the probe found them
+        // Select the perch while the colliders are still in the positions used by the probe.
         var perchEcef = _streamer.Origin.UnityToEcef(FindPerch(ground));
 
-        // recentre vertically so the ground sits near y = 0, where floats are most precise
+        // Recenter vertically so the ground remains near y = 0, where floating-point precision is highest.
         var groundEcef = _streamer.Origin.UnityToEcef(ground);
         var (lat, lon, height) = Wgs84.EcefToGeodetic(groundEcef);
         _streamer.SetOrigin(new GeoOrigin(lat, lon, height));
@@ -468,12 +550,12 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// somewhere off to the side of <paramref name="target"/> to look at it from: of a ring of spots around it,
-    /// the one with the lowest ground and roofs, raised clear of them, and never below the target's own ground.
+    /// Finds a position beside <paramref name="target"/> with the lowest surrounding obstruction, raised clear of
+    /// the ground and roofs and never below the target's own ground.
     /// </summary>
     private Vector3 FindPerch(Vector3 target)
     {
-        // the target's the highest thing over it (a tower's tip, say); the floor is the lowest, its ground
+        // The target may be the top of a tower, so find the lowest ground directly below it.
         var floor = RaycastTiles(new Vector3(target.x, ProbeTop, target.z), ProbeTop * 2, true)?.y ?? target.y;
 
         var best = new Vector3(target.x, floor + PerchHeight, target.z);
@@ -483,11 +565,11 @@ public sealed class StreetySession : IDisposable
         {
             var angle = i * Mathf.PI * 2f / PerchBearings;
             var centre = target + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * PerchDistance;
-            // its own ground, not the target's; the target can be the tip of a tower
+            // Use the candidate's own ground rather than the target's; the target may be on a tower.
             var top = float.MinValue;
             var found = false;
 
-            // the middle and corners of the footprint, so it doesn't land half inside a building
+            // Check the footprint center and corners to avoid placing the player partly inside a building.
             for (var j = 0; j < 5; j++)
             {
                 var offset = j == 0
@@ -514,7 +596,7 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// lets the safety platform go once the local player's stepped off it, and the pin with it.
+    /// Releases the safety platform and location pin after the local player has stepped away from the platform.
     /// </summary>
     private void UpdatePerch()
     {
@@ -531,7 +613,7 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// the safety platform's zone saw the local player come or go.
+    /// Records whether the local player is inside the safety platform's trigger zone.
     /// </summary>
     public void ReportOnPlatform(bool inside)
     {
@@ -548,7 +630,7 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// keeps the local player near the unity origin so float precision holds up while exploring.
+    /// Recenters the Unity origin when the local player moves too far away to preserve floating-point precision.
     /// </summary>
     private void UpdateRebase()
     {
@@ -576,11 +658,12 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// the highest ground straight down from <paramref name="from"/>, or the lowest when <paramref name="lowest"/>.
+    /// Finds the highest ground directly below <paramref name="from"/>, or the lowest ground when
+    /// <paramref name="lowest"/> is true.
     /// </summary>
     private Vector3? RaycastTiles(Vector3 from, float distance, bool lowest = false)
     {
-        // water surfaces are triggers, and count as ground; players arrive floating on them
+        // Water surfaces are triggers and count as ground, allowing players to arrive on the water.
         var hits = Physics.RaycastAll(from, Vector3.down, distance, ~0, QueryTriggerInteraction.Collide);
         Vector3? best = null;
 

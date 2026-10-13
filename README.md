@@ -9,10 +9,10 @@ you can:
 
 and we got:
 
-- navmesh support for ai
-- beautiful dynamic lighting
+- pretty realtime lighting and environment diffusion
+- navmesh support for NPCs
+- optional integration with [FluidLab](https://github.com/Lakatrazz/FluidLab)
 - [Photorealistic 3D Tiles](https://developers.google.com/maps/documentation/tile/3d-tiles) support
-- integration with fluid lab
 
 > [!NOTE]
 > **RAM Requirements**
