@@ -32,6 +32,16 @@ public sealed class StreetySession : IDisposable
     private const float SettleSeconds = 1f;
     private const float WarpTimeout = 45f;
 
+    // arrivals land on the safety platform, perched off to the side of the target, until they step off
+    private const float PerchDistance = 80f;
+    private const float PerchHeight = 12f;
+    private const float PerchFootprint = 12f;
+    private const int PerchBearings = 8;
+
+    // how long the local player has to be off the platform before it's let go; rides out teleport flicker
+    private const float LeaveSeconds = 0.25f;
+    private const float ArriveGraceSeconds = 1f;
+
     private readonly GameObject _root;
     private readonly TileClient _client;
     private readonly Geocoder _geocoder;
@@ -47,6 +57,7 @@ public sealed class StreetySession : IDisposable
     private readonly SkyFog _sky;
     private readonly StreetyMusic _music;
     private readonly NimbusBoost _nimbus;
+    private readonly LocationPin _pin;
     private readonly WaterMap _water;
     private readonly WaterBodies _waterBodies;
     private readonly TileNavMesh _navMesh;
@@ -64,6 +75,12 @@ public sealed class StreetySession : IDisposable
     private float _probeStableSince;
     private bool _pendingStart;
     private bool _arrived;
+    private float _arrivedAt;
+    private Double3 _platformEcef;
+    private bool _hasPlatform;
+    private bool _perched;
+    private bool _onPlatform;
+    private float _offPlatformSince;
     private Camera _camera;
 
     /// <summary>
@@ -80,6 +97,17 @@ public sealed class StreetySession : IDisposable
     /// again from the moment a warp throws the old area away.
     /// </summary>
     public bool HasGround => _arrived;
+
+    /// <summary>
+    /// whether the safety platform should be out: while there's no ground, and after arriving until the local
+    /// player steps off it.
+    /// </summary>
+    public bool PlatformNeeded => !_arrived || _perched;
+
+    /// <summary>
+    /// where the top of the safety platform belongs, in unity space; null until the first warp places it.
+    /// </summary>
+    public Vector3? PlatformSurface => _hasPlatform ? _streamer.Origin.EcefToUnity(_platformEcef) : null;
 
     public NimbusBoost Nimbus => _nimbus;
 
@@ -133,6 +161,7 @@ public sealed class StreetySession : IDisposable
         _sky = new SkyFog();
         _music = new StreetyMusic();
         _nimbus = new NimbusBoost();
+        _pin = new LocationPin(_root.transform);
 
         // the rig may not exist yet during level load; the first warp starts once it does
         _pendingStart = true;
@@ -166,6 +195,8 @@ public sealed class StreetySession : IDisposable
         _warpStarted = Time.time;
         _probeHit = null;
         _arrived = false;
+        _perched = false;
+        _pin.Hide(true);
 
         // a new place: nothing loaded is useful any more
         _streamer.UnloadAll();
@@ -174,6 +205,7 @@ public sealed class StreetySession : IDisposable
         _streamer.SetOrigin(new GeoOrigin(latitude, longitude, 0));
 
         CreatePlatform(new Vector3(0, WaitHeight, 0));
+        PlacePlatform(new Vector3(0, WaitHeight, 0));
         if (Player.RigManager != null)
             RigTeleport.To(Player.RigManager, new Vector3(0, WaitHeight + 0.1f, 0));
 
@@ -220,6 +252,8 @@ public sealed class StreetySession : IDisposable
         else if (_warp == WarpPhase.None)
             UpdateRebase();
 
+        UpdatePerch();
+
         if (Time.frameCount % 30 == 0)
             _attribution.SetText(BuildAttribution());
 
@@ -232,6 +266,7 @@ public sealed class StreetySession : IDisposable
         _atmosphere.Update(_streamer.Origin, _sun, _ground, eye);
         _sky.Visibility = _atmosphere.LocalVisibility;
         _sky.Update(_atmosphere.Revision, eye);
+        _pin.Update(_streamer.Origin, eye);
 
         // music plays once an area's loaded, not while waiting on the platform
         _music.Update(_arrived);
@@ -383,20 +418,110 @@ public sealed class StreetySession : IDisposable
 
     private void FinishWarp(Vector3 ground)
     {
+        // pick the perch while the colliders are still where the probe found them
+        var perchEcef = _streamer.Origin.UnityToEcef(FindPerch(ground));
+
         // recentre vertically so the ground sits near y = 0, where floats are most precise
         var groundEcef = _streamer.Origin.UnityToEcef(ground);
         var (lat, lon, height) = Wgs84.EcefToGeodetic(groundEcef);
         _streamer.SetOrigin(new GeoOrigin(lat, lon, height));
 
+        var perch = _streamer.Origin.EcefToUnity(perchEcef);
+        PlacePlatform(perch);
+
         if (Player.RigManager != null)
-            RigTeleport.To(Player.RigManager, new Vector3(0, 0.05f, 0));
+            RigTeleport.To(Player.RigManager, perch + new Vector3(0, 0.05f, 0));
         DestroyPlatform();
+
+        _pin.Show(_warpName, groundEcef);
 
         _warp = WarpPhase.None;
         _arrived = true;
+        _arrivedAt = Time.time;
+        _perched = true;
         LocationName = _warpName;
         Status = $"at {_warpName}";
         StreetyMod.Log.Msg($"arrived at {_warpName} ({lat:F6}, {lon:F6}, {height:F1}m)");
+    }
+
+    /// <summary>
+    /// somewhere off to the side of <paramref name="target"/> to look at it from: of a ring of spots around it,
+    /// the one with the lowest ground and roofs, raised clear of them, and never below the target's own ground.
+    /// </summary>
+    private Vector3 FindPerch(Vector3 target)
+    {
+        // the target's the highest thing over it (a tower's tip, say); the floor is the lowest, its ground
+        var floor = RaycastTiles(new Vector3(target.x, ProbeTop, target.z), ProbeTop * 2, true)?.y ?? target.y;
+
+        var best = new Vector3(target.x, floor + PerchHeight, target.z);
+        var bestTop = float.MaxValue;
+
+        for (var i = 0; i < PerchBearings; i++)
+        {
+            var angle = i * Mathf.PI * 2f / PerchBearings;
+            var centre = target + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * PerchDistance;
+            // its own ground, not the target's; the target can be the tip of a tower
+            var top = float.MinValue;
+            var found = false;
+
+            // the middle and corners of the footprint, so it doesn't land half inside a building
+            for (var j = 0; j < 5; j++)
+            {
+                var offset = j == 0
+                    ? Vector3.zero
+                    : new Vector3(j % 2 == 0 ? 1 : -1, 0, j < 3 ? 1 : -1) * (PerchFootprint * 0.5f);
+
+                var hit = RaycastTiles(new Vector3(centre.x + offset.x, ProbeTop, centre.z + offset.z), ProbeTop * 2);
+
+                if (!hit.HasValue)
+                    continue;
+
+                found = true;
+                top = Mathf.Max(top, hit.Value.y);
+            }
+
+            if (!found || top >= bestTop)
+                continue;
+
+            bestTop = top;
+            best = new Vector3(centre.x, Mathf.Max(top, floor) + PerchHeight, centre.z);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// lets the safety platform go once the local player's stepped off it, and the pin with it.
+    /// </summary>
+    private void UpdatePerch()
+    {
+        if (!_perched || _onPlatform)
+            return;
+
+        var since = Mathf.Max(_offPlatformSince, _arrivedAt + ArriveGraceSeconds - LeaveSeconds);
+
+        if (Time.time - since < LeaveSeconds)
+            return;
+
+        _perched = false;
+        _pin.Hide();
+    }
+
+    /// <summary>
+    /// the safety platform's zone saw the local player come or go.
+    /// </summary>
+    public void ReportOnPlatform(bool inside)
+    {
+        if (_onPlatform && !inside)
+            _offPlatformSince = Time.time;
+
+        _onPlatform = inside;
+    }
+
+    private void PlacePlatform(Vector3 surface)
+    {
+        _platformEcef = _streamer.Origin.UnityToEcef(surface);
+        _hasPlatform = true;
     }
 
     /// <summary>
@@ -427,7 +552,10 @@ public sealed class StreetySession : IDisposable
         StreetyMod.Log.Msg($"rebased origin to {origin}");
     }
 
-    private Vector3? RaycastTiles(Vector3 from, float distance)
+    /// <summary>
+    /// the highest ground straight down from <paramref name="from"/>, or the lowest when <paramref name="lowest"/>.
+    /// </summary>
+    private Vector3? RaycastTiles(Vector3 from, float distance, bool lowest = false)
     {
         // water surfaces are triggers, and count as ground; players arrive floating on them
         var hits = Physics.RaycastAll(from, Vector3.down, distance, ~0, QueryTriggerInteraction.Collide);
@@ -448,7 +576,7 @@ public sealed class StreetySession : IDisposable
             if (_platform != null && collider.gameObject == _platform)
                 continue;
 
-            if (!best.HasValue || hit.point.y > best.Value.y)
+            if (!best.HasValue || (lowest ? hit.point.y < best.Value.y : hit.point.y > best.Value.y))
                 best = hit.point;
         }
 
@@ -491,6 +619,7 @@ public sealed class StreetySession : IDisposable
         _sun?.Dispose();
         _music?.Dispose();
         _nimbus?.Dispose();
+        _pin?.Dispose();
         _waterBodies?.Dispose();
         _water?.Dispose();
 

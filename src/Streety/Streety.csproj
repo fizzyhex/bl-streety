@@ -38,6 +38,7 @@
     <Reference Include="Il2CppSystem" HintPath="$(Il2CppAssemblies)\Il2CppSystem.dll" />
     <Reference Include="Assembly-CSharp" HintPath="$(Il2CppAssemblies)\Assembly-CSharp.dll" />
     <Reference Include="Il2CppSLZ.Marrow" HintPath="$(Il2CppAssemblies)\Il2CppSLZ.Marrow.dll" />
+    <Reference Include="Il2CppUltEvents" HintPath="$(Il2CppAssemblies)\Il2CppUltEvents.dll" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(Il2CppAssemblies)\Unity.TextMeshPro.dll" />
     <Reference Include="UnityEngine.UI" HintPath="$(Il2CppAssemblies)\UnityEngine.UI.dll" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(Il2CppAssemblies)\UnityEngine.UIModule.dll" />
