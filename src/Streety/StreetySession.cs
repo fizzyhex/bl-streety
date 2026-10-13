@@ -174,7 +174,8 @@ public sealed class StreetySession : IDisposable
         _streamer.SetOrigin(new GeoOrigin(latitude, longitude, 0));
 
         CreatePlatform(new Vector3(0, WaitHeight, 0));
-        Player.RigManager?.Teleport(new Vector3(0, WaitHeight + 0.1f, 0), true);
+        if (Player.RigManager != null)
+            RigTeleport.To(Player.RigManager, new Vector3(0, WaitHeight + 0.1f, 0));
 
         Status = $"loading tiles for {name}…";
         StreetyMod.Log.Msg($"warping to {name} {_streamer.Origin}");
@@ -387,7 +388,8 @@ public sealed class StreetySession : IDisposable
         var (lat, lon, height) = Wgs84.EcefToGeodetic(groundEcef);
         _streamer.SetOrigin(new GeoOrigin(lat, lon, height));
 
-        Player.RigManager?.Teleport(new Vector3(0, 0.05f, 0), true);
+        if (Player.RigManager != null)
+            RigTeleport.To(Player.RigManager, new Vector3(0, 0.05f, 0));
         DestroyPlatform();
 
         _warp = WarpPhase.None;
@@ -420,7 +422,7 @@ public sealed class StreetySession : IDisposable
         var origin = new GeoOrigin(lat, lon, old.Height);
 
         _streamer.SetOrigin(origin);
-        rig.Teleport(origin.EcefToUnity(feetEcef), false);
+        RigTeleport.To(rig, origin.EcefToUnity(feetEcef), false);
 
         StreetyMod.Log.Msg($"rebased origin to {origin}");
     }
