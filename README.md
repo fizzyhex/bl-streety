@@ -27,7 +27,7 @@ and we got:
 
 | project                  | by                                                                                    | used for                               |
 | ------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------- |
-| Fluid Lab                | [Lakatrazz]                                                                           | Optional water physics                 |
+| [FluidLab]               | [Lakatrazz]                                                                           | Optional water physics                 |
 | [Fusion]                 | [Lakatrazz]                                                                           | Multiplayer for Bonelab                |
 | [Google Maps API]        | [Google]                                                                              | 3D street data                         |
 | [Google Earth]           | [Google], Joshua Moshier                                                              | Dynamic Soundtrack                     |
@@ -35,6 +35,7 @@ and we got:
 | Overpass Community       | [overpass-api.de], [maps.mail.ru], [overpass.kumi.systems], [overpass.private.coffee] | Mirrors for Overpass                   |
 | Earth Imagery            | [NASA]                                                                                | Celestial Master Spawnable             |
 
+[FluidLab]: https://github.com/Lakatrazz/FluidLab
 [Lakatrazz]: https://github.com/Lakatrazz
 [Fusion]: https://github.com/Lakatrazz/BONELAB-Fusion
 [Google Maps API]: https://developers.google.com/maps
