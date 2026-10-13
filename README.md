@@ -14,7 +14,8 @@ and we got:
 - [Photorealistic 3D Tiles](https://developers.google.com/maps/documentation/tile/3d-tiles) support
 - integration with fluid lab
 
-> [!NOTE] RAM Requirements
+> [!NOTE]
+> **RAM Requirements**
 > Streety defaults to a 2GB ram allowance to allow it to handle dense areas! Make sure you have some headroom before jumping in.
 
 ---
