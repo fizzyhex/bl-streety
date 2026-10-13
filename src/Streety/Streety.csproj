@@ -53,6 +53,11 @@
     <Reference Include="BoneLib" HintPath="$(BONELAB_DIR)\Mods\BoneLib.dll" />
   </ItemGroup>
 
+  <!-- components shared with the sdk project; registered in il2cpp so bundles resolve them by name -->
+  <ItemGroup>
+    <Compile Include="..\..\StreetyMarrowProject\Assets\Streety\Scripts\**\*.cs" LinkBase="Marrow" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="..\..\native\draco\dracodec_unity.dll" Link="dracodec_unity.dll" Condition="Exists('..\..\native\draco\dracodec_unity.dll')" />
   </ItemGroup>

@@ -26,6 +26,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 5dc501ed63b4a9f41a035f4fe6e21d7c, type: 2}
   - {fileID: 11400000, guid: 47ab4a6078a9caa4bb6ad7a8a579fd9f, type: 2}
   - {fileID: 11400000, guid: 479091f0943a28d4dbb29f245fe2f483, type: 2}
+  - {fileID: 11400000, guid: bc12f599b48e22a4191d6050b35d1a3d, type: 2}
   _dataCards:
   - {fileID: 11400000, guid: 89849606eee17434f868f7a0e00982da, type: 2}
   - {fileID: 11400000, guid: ea5f008eb5fc6a04aabf7fe9080ee11a, type: 2}
@@ -36,6 +37,7 @@ MonoBehaviour:
   - Spawnable  World Location Pin
   - Level  Streety
   - Spawnable  Streety Render Assets
+  - Spawnable  Celestial Master
   _datacardTitles:
   - MonoDisc  GE - music_terrain
   - MonoDisc  GE - music_terrain_flying

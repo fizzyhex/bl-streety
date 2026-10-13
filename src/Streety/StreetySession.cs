@@ -77,6 +77,8 @@ public sealed class StreetySession : IDisposable
 
     public NimbusBoost Nimbus => _nimbus;
 
+    public SunDriver Sun => _sun;
+
     public StreetySession()
     {
         _root = new GameObject("streety");

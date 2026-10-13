@@ -48,6 +48,9 @@ Shader "fizzyhex/streety/Sky"
             float4 _StreetyCloudShape;
             // celestial sphere -> world, turning with sidereal time
             float4x4 _StreetyStarRotation;
+            // debugging only, zero in game. x: fake coarse shading on the right half of the screen, in pixels per block;
+            // y: show one term (1 scatter, 2 night glow, 3 stars, 4 haze, 5 clouds, 6 volumetrics, 7 dither)
+            float4 _StreetySkyDebug;
 
             // --- scattering (unity's procedural skybox) -----------------------------------------------------------
 
@@ -299,13 +302,28 @@ Shader "fizzyhex/streety/Sky"
 
             half4 frag(Varyings i) : SV_Target
             {
-                float3 eyeRay = normalize(i.ray);
+                // fake foveation: shade the whole block from its centre, like a variable rate shader would
+                float block = _StreetySkyDebug.x;
+                float2 pixel = i.pos.xy;
+                float3 rayAt = i.ray;
+                float3 wPos = i.wPos;
+
+                if (block > 1 && pixel.x > _ScreenParams.x * 0.5)
+                {
+                    float2 offset = (floor(pixel / block) + 0.5) * block - pixel;
+                    pixel += offset;
+                    rayAt += ddx(i.ray) * offset.x + ddy(i.ray) * offset.y;
+                    wPos += ddx(i.wPos) * offset.x + ddy(i.wPos) * offset.y;
+                }
+
+                float3 eyeRay = normalize(rayAt);
                 float3 sun = StreetySunDirection();
                 float3 camera = _WorldSpaceCameraPos;
                 float above = saturate(eyeRay.y * 50.0);
 
                 half3 sky, sunDisc;
                 Scatter(eyeRay, sun, sky, sunDisc);
+                half3 scatter = sky;
 
                 // night: a dim sky that glows towards the horizon, and stars
                 float horizonGlow = 1.0 - sqrt(saturate(eyeRay.y));
@@ -322,14 +340,24 @@ Shader "fizzyhex/streety/Sky"
                 float cloud = Clouds(eyeRay, cloudColour);
                 colour = lerp(colour, cloudColour, cloud);
 
-                half4 finalColour = Volumetrics(half4(colour, 1.0), i.wPos);
+                half4 finalColour = Volumetrics(half4(colour, 1.0), wPos);
 
                 // dither so gradients don't band. it's applied in srgb so it stays one 8-bit step at night, where a
                 // linear step is many; and it's a hash rather than a 4x4 pattern, since foveated rendering shades
                 // whole blocks of pixels at once and a pattern then collapses into a flat offset around the periphery
-                float noise = frac(52.9829189 * frac(dot(i.pos.xy, float2(0.06711056, 0.00583715)))) - 0.5;
+                float noise = frac(52.9829189 * frac(dot(pixel, float2(0.06711056, 0.00583715)))) - 0.5;
                 float3 srgb = LinearToSRGB(max(finalColour.rgb, 0.0));
                 finalColour.rgb = SRGBToLinear(max(srgb + noise / 255.0, 0.0));
+
+                int term = (int)_StreetySkyDebug.y;
+                if (term == 1) finalColour.rgb = scatter;
+                else if (term == 2) finalColour.rgb = _StreetyNightSky.rgb * (1.0 + 1.5 * horizonGlow);
+                else if (term == 3) finalColour.rgb = Stars(eyeRay) * _StreetySky.w * above;
+                else if (term == 4) finalColour.rgb = StreetyHazeColour(eyeRay) * (1.0 - transmittance);
+                else if (term == 5) finalColour.rgb = cloudColour * cloud;
+                else if (term == 6) finalColour.rgb = Volumetrics(half4(0, 0, 0, 1), wPos).rgb;
+                else if (term == 7) finalColour.rgb = SRGBToLinear((0.5 + noise).xxx);
+
                 return finalColour;
             }
             ENDHLSL
