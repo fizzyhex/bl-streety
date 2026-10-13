@@ -23,3 +23,7 @@ https://github.com/Lakatrazz/BONELAB-Fusion
 Level events can be synchronised using RPC Variables / RPC Events. Features should account for the possibility of multiple rigs owned by other players being able to co-exist.
 
 Maintain compatibility with singleplayer for users who aren't using Fusion, or don't have it installed.
+
+## README
+
+The README.md is user-facing, and should avoid inducing information overload through implementation rundowns, and things better seen in the source code. Avoid adding to it unless asked, or if information is invalidated by changes. 
