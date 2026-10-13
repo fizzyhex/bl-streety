@@ -1303,15 +1303,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a27af018ab5bf1d40bc29ec513487998, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a27af018ab5bf1d40bc29ec513487998, type: 3}
       propertyPath: m_LocalScale.y
-      value: 18
+      value: 0.08
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a27af018ab5bf1d40bc29ec513487998, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: a27af018ab5bf1d40bc29ec513487998, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1442,7 +1442,7 @@ MonoBehaviour:
         _Int: 0
         _String: 
         _X: 1000
-        _Y: 72.5
+        _Y: 18
         _Z: 1000
         _W: 0
         _Object: {fileID: 0}
