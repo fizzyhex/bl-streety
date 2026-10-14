@@ -1,6 +1,6 @@
-// streety's sky: slz's procedural scattering (from unity's built-in procedural skybox, MIT) with the same height haze
-// as the tiles, a cloud layer, stars and a night sky on top. driven entirely by globals the mod sets each frame
-// (src/Streety/Render/Atmosphere.cs), so it follows the sun, the region and the weather.
+// Procedural sky shader based on SLZ URP's procedural skybox.
+// Adds haze for tiles, clouds, stars and a night-sky layer.
+// Globals are managed by `Atmosphere.cs`.
 Shader "fizzyhex/streety/Sky"
 {
     Properties

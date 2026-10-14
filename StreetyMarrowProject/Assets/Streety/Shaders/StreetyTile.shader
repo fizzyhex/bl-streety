@@ -1,5 +1,7 @@
-// photogrammetry tiles: the imagery is the albedo, lit like litmas (sun + shadows from realtime objects, extra lights,
-// probes, ssao) and then faded into streety's height haze instead of unity's fog.
+// Shader for rendering tiles, based on LitMAS's lighting.
+// Supports SSAO and additional lights.
+//
+// This shader is required for height haze instead of Unity fog.
 Shader "fizzyhex/streety/Tile"
 {
     Properties
