@@ -1,5 +1,6 @@
-// a planet lit only by the direction of the main directional light, so it reads the time of day without taking any
-// real lighting: the day side shows the surface, the night side fades to its emission (city lights) past the terminator.
+// Planet shader used by the Celestial Master.
+// The sun-lit side shows the surface, and city lights are shown past the terminator via the emissive texture.
+// Uses the lighting of exclusively the main directional light.
 Shader "fizzyhex/streety/ShadedPlanet"
 {
     Properties
@@ -48,7 +49,7 @@ Shader "fizzyhex/streety/ShadedPlanet"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            // single pass instanced stereo needs sm3.5+; the default 2.5 target drops it and the planet vanishes in the headset
+            // NOTE: sm3.5+ is required, 2.5 is default and doesn't show in headset
             #pragma target 5.0
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/PlatformCompiler.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -94,7 +95,7 @@ Shader "fizzyhex/streety/ShadedPlanet"
                 half3 viewWS = normalize(GetWorldSpaceViewDir(i.positionWS));
                 half3 lightDir = GetMainLight().direction;
 
-                // 1 in full daylight, 0 in full night, blended across a band either side of the terminator
+                // 1=full daylight, 0=full night, blended across a band either side of the terminator
                 half ndl = dot(normalWS, lightDir);
                 half day = smoothstep(-_Terminator, _Terminator, ndl);
 
