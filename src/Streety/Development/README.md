@@ -26,6 +26,8 @@ By default, the build looks for `bonelab-mcp` in a sibling directory. Set `Bonel
 
 ## Building and Deployment
 
+\(agents)
+
 To build without replacing the installed Streety DLL:
 
 ```bash
@@ -51,18 +53,3 @@ The adapter exposes two tools:
 **Warp operations are asynchronous.** An accepted request does not necessarily mean the warp succeeded.
 
 After calling `streety_warp`, poll `streety_status` until `isWarping` is false, then inspect the final status to determine whether the operation succeeded or failed.
-
-### Registration
-
-Tool registration occurs on the main thread and only when both conditions are met:
-
-- The contracts assembly is loaded.
-- The MCP helper is enabled.
-
-## Known Requirements
-
-The Streety level still requires a **player marker** and a rebuilt/copied scene bundle for the local rig to spawn correctly.
-
-## Further Documentation
-
-See the [BONELAB MCP helper README](https://github.com/fizzyhex/bonelab-mcp/README.md) for MCP configuration, CLI usage, deployment instructions, and live testing.
