@@ -7,8 +7,7 @@ namespace Streety;
 /// </summary>
 /// <remarks>
 /// Fusion syncs raw Unity positions, so every peer in a lobby has to derive the same <see cref="GeoOrigin"/>. The
-/// host probes the ground and shares its ECEF position; clients centre on that instead of their own probe, which can
-/// land on a different level of detail.
+/// host probes the ground and shares its ECEF position.
 ///
 /// The ground only seeds the origin on arrival. Once the host rebases, the shared origin moves away from it, so the
 /// current one is tracked separately in <see cref="Origin"/>.

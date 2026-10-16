@@ -3,8 +3,9 @@ using Streety.Geo;
 namespace Streety.Multiplayer;
 
 /// <summary>
-/// the rest of the mod's only way into fusion. nothing in here names a labfusion type, so the jit never goes looking
-/// for the assembly unless it's actually loaded; everything degrades to "singleplayer" when it isn't.
+/// entry point for all fusion interaction from the rest of the mod. this class doesn't reference any labfusion types
+/// directly, so the jit won't try to resolve the fusion assembly unless it's loaded. when fusion isn't present, every
+/// member falls back to singleplayer behaviour.
 /// </summary>
 public static class FusionBridge
 {
