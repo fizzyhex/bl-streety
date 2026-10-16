@@ -13,8 +13,6 @@ namespace Streety.Movement;
 /// </summary>
 /// <remarks>
 /// the boost grows exponentially from <see cref="FloorHeight"/> up to the ceiling pref, then holds.
-/// only guns held by the local rig are boosted.
-/// a gun gets its base speed back as soon as it's let go.
 /// </remarks>
 public sealed class NimbusBoost : IDisposable
 {

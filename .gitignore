@@ -2,8 +2,11 @@
 
 .env
 
-# UNITY PROJECT
+# scrap book of UnityExplorer scripts
 
+ml-scripts/
+
+# UNITY PROJECT
 
 StreetyMarrowProject/Assets/AddressableAssetsData
 

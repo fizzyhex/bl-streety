@@ -21,12 +21,67 @@ public static class StreetyMenu
         var page = Page.Root.CreatePage("streety", Accent);
 
         page.CreateString("location", Color.white, _location, value => _location = value);
-        page.CreateFunction("go", Accent, Go);
-        _status = page.CreateFunction("load the streety level to explore", Muted, null);
+        page.CreateFunction("go!", Accent, Go);
+        _status = page.CreateFunction("load the streety level!", Muted, null);
+
+        CreateSettings(page);
 
 #if DEBUG
         CreateDev(page);
 #endif
+    }
+
+    private static Page _settings;
+    private static FunctionElement _lobbyRebasing;
+    private static bool _lobbyRebasingShown;
+
+    private static void CreateSettings(Page parent)
+    {
+        _settings = parent.CreatePage("settings", Muted);
+
+        _settings.CreateBool("rebasing", Color.white, Prefs.Rebasing.Value, value => Save(Prefs.Rebasing, value));
+
+        // only added to the page while it applies; see UpdateSettings
+        _lobbyRebasing = _settings.CreateFunction(LobbyRebasingLabel(), Color.white, CycleLobbyRebasing);
+        _lobbyRebasingShown = true;
+        UpdateSettings();
+    }
+
+    private static string LobbyRebasingLabel() => $"lobby rebasing: {Prefs.RebaseModeName(Prefs.ResolveRebaseMode())}";
+
+    private static void CycleLobbyRebasing()
+    {
+        var next = (RebaseMode)(((int)Prefs.ResolveRebaseMode() + 1) % Enum.GetValues<RebaseMode>().Length);
+        Save(Prefs.LobbyRebasing, Prefs.RebaseModeName(next));
+        _lobbyRebasing.ElementName = LobbyRebasingLabel();
+    }
+
+    /// <summary>
+    /// the lobby mode only matters to whoever hosts, so it's hidden without fusion, for clients, and while rebasing
+    /// is off.
+    /// </summary>
+    private static void UpdateSettings()
+    {
+        if (_settings == null)
+            return;
+
+        var show = Multiplayer.FusionBridge.Available && Prefs.Rebasing.Value && !Multiplayer.FusionBridge.IsClient;
+
+        if (show == _lobbyRebasingShown)
+            return;
+
+        _lobbyRebasingShown = show;
+
+        if (show)
+            _settings.Add(_lobbyRebasing);
+        else
+            _settings.Remove(_lobbyRebasing);
+    }
+
+    private static void Save<T>(MelonLoader.MelonPreferences_Entry<T> entry, T value)
+    {
+        entry.Value = value;
+        MelonLoader.MelonPreferences.Save();
     }
 
 #if DEBUG
@@ -47,12 +102,6 @@ public static class StreetyMenu
         nimbus.CreateFloat("ceiling (m)", Color.white, Prefs.NimbusBoostCeiling.Value, 250f, 100f, 20000f,
             value => Save(Prefs.NimbusBoostCeiling, value));
         _boost = nimbus.CreateFunction("not flying", Muted, null);
-    }
-
-    private static void Save<T>(MelonLoader.MelonPreferences_Entry<T> entry, T value)
-    {
-        entry.Value = value;
-        MelonLoader.MelonPreferences.Save();
     }
 
     private static void UpdateDev()
@@ -85,8 +134,9 @@ public static class StreetyMenu
 
     public static void Update()
     {
-        var status = StreetyMod.Session?.Status ?? "load the streety level to explore";
+        var status = StreetyMod.Session?.Status ?? "load the streety level!";
         SetStatus(status);
+        UpdateSettings();
 
 #if DEBUG
         UpdateDev();

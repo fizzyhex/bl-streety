@@ -7,11 +7,11 @@ using UnityEngine;
 namespace Streety.Movement;
 
 /// <summary>
-/// teleports a rig the way fusion does, so held props come along cleanly instead of being dragged across the gap.
+/// teleports a rig so held props don't cause flinging.
 /// </summary>
 /// <remarks>
-/// mirrors <c>RigManagerExtensions.TeleportToPosition</c> in bonelab fusion: the physics rig is snapped back to its
-/// default pose, moved by its centre of pressure, and its hands reset, which lets bonelab carry whatever they hold.
+/// mirrors <c>RigManagerExtensions.TeleportToPosition</c>.
+/// the physics rig is snapped back to its default pose which lets bonelab carry whatever they hold.
 /// </remarks>
 public static class RigTeleport
 {

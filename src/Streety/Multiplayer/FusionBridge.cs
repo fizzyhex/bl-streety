@@ -1,3 +1,5 @@
+using Streety.Geo;
+
 namespace Streety.Multiplayer;
 
 /// <summary>
@@ -7,7 +9,7 @@ namespace Streety.Multiplayer;
 public static class FusionBridge
 {
     private static bool _available;
-    private static (double Latitude, double Longitude, string Name)? _pending;
+    private static WarpTarget _pending;
 
     /// <summary>
     /// represents if fusion is installed.
@@ -82,19 +84,71 @@ public static class FusionBridge
     }
 
     /// <summary>
-    /// Stores a location received before a session is available.
-    /// The next session consumes the pending location.
+    /// Sends the ground the host's origin is centred on to the other players, or to one player when
+    /// <paramref name="target"/> is set. Does nothing when called by a client or before the host has arrived.
     /// </summary>
-    internal static void Stash(double latitude, double longitude, string name) => _pending = (latitude, longitude, name);
-
-    internal static bool TakePending(out double latitude, out double longitude, out string name)
+    public static void AnnounceGround(WarpTarget warp, byte? target = null)
     {
-        latitude = _pending?.Latitude ?? 0;
-        longitude = _pending?.Longitude ?? 0;
-        name = _pending?.Name;
+        if (!IsHost || warp?.Ground is not { } ground)
+            return;
 
-        var had = _pending.HasValue;
+        try
+        {
+            FusionApi.SendGround(warp.Latitude, warp.Longitude, ground, target);
+        }
+        catch (Exception e)
+        {
+            StreetyMod.Log.Warning($"couldn't announce the ground: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sends the host's current origin to the other players, or to one player when <paramref name="target"/> is set.
+    /// Does nothing when called by a client or before the origin is known.
+    /// </summary>
+    public static void AnnounceOrigin(WarpTarget warp, byte? target = null)
+    {
+        if (!IsHost || warp?.Origin is not { } origin)
+            return;
+
+        try
+        {
+            FusionApi.SendOrigin(warp.Latitude, warp.Longitude, origin, target);
+        }
+        catch (Exception e)
+        {
+            StreetyMod.Log.Warning($"couldn't announce the origin: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Stores a location received before a session is available for the next session to consume.
+    /// </summary>
+    internal static void Stash(double latitude, double longitude, string name) =>
+        _pending = new WarpTarget(latitude, longitude, name);
+
+    /// <summary>
+    /// Stores the host's ground for the stashed location. Ignored when it belongs to a different warp.
+    /// </summary>
+    internal static void StashGround(double latitude, double longitude, Double3 ground)
+    {
+        if (_pending != null && _pending.Matches(latitude, longitude))
+            _pending.Ground = ground;
+    }
+
+    /// <summary>
+    /// Stores the host's origin for the stashed location. Ignored when it belongs to a different warp.
+    /// </summary>
+    internal static void StashOrigin(double latitude, double longitude, GeoOrigin origin)
+    {
+        if (_pending != null && _pending.Matches(latitude, longitude))
+            _pending.Origin = origin;
+    }
+
+    internal static WarpTarget TakePending()
+    {
+        var pending = _pending;
         _pending = null;
-        return had;
+        return pending;
     }
 }

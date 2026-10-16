@@ -63,7 +63,7 @@ namespace Streety.Marrow
             var error = HoverHeight - gap;
             var speed = _body.velocity.y;
 
-            // pushing would keep waking it; let it settle
+            // don't keep pushing to avoid sleeping
             if (Mathf.Abs(error) < RestError && Mathf.Abs(speed) < RestSpeed)
                 return;
 

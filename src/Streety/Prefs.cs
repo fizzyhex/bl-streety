@@ -2,6 +2,18 @@ using MelonLoader;
 
 namespace Streety;
 
+/// <summary>
+/// what a lobby host recentres the world around. outside a lobby the local rig is always used.
+/// </summary>
+public enum RebaseMode
+{
+    /// <summary>the average position of every rig.</summary>
+    Averaged,
+
+    /// <summary>the host's own rig.</summary>
+    HostBased,
+}
+
 public static class Prefs
 {
     /// <summary>
@@ -23,7 +35,9 @@ public static class Prefs
     public static MelonPreferences_Entry<double> StartLongitude { get; private set; }
     public static MelonPreferences_Entry<string> StartName { get; private set; }
     public static MelonPreferences_Entry<float> FarClip { get; private set; }
+    public static MelonPreferences_Entry<bool> Rebasing { get; private set; }
     public static MelonPreferences_Entry<float> RebaseDistance { get; private set; }
+    public static MelonPreferences_Entry<string> LobbyRebasing { get; private set; }
     public static MelonPreferences_Entry<bool> DevAnyLevel { get; private set; }
     public static MelonPreferences_Entry<float> MusicVolume { get; private set; }
     public static MelonPreferences_Entry<float> SunHourOffset { get; private set; }
@@ -57,8 +71,13 @@ public static class Prefs
         StartLongitude = _category.CreateEntry("start_longitude", 2.294481, "start longitude");
         StartName = _category.CreateEntry("start_name", "Eiffel Tower", "start location name");
         FarClip = _category.CreateEntry("far_clip", 20000f, "camera far clip (m)");
+        Rebasing = _category.CreateEntry("rebasing", true,
+            "origin rebasing", "recentre the world when a player strays too far from it; keeps physics precise");
         RebaseDistance = _category.CreateEntry("rebase_distance", 4000f,
             "origin rebase distance (m)", "recentre the world when a player gets this far from the origin");
+        LobbyRebasing = _category.CreateEntry("lobby_rebasing", "averaged",
+            "lobby rebasing", "when you host: what the world recentres around " +
+            "(averaged or host)");
         DevAnyLevel = _category.CreateEntry("dev_any_level", false,
             "dev: stream in any level", "start streety in every level, not just the streety level");
         MusicVolume = _category.CreateEntry("music_volume", 0.5f,
@@ -86,6 +105,21 @@ public static class Prefs
             "travel permission", "when you host: who can travel straight away instead of sending a request " +
             "(host, operator, owner or everyone)");
     }
+
+    /// <summary>
+    /// parses <see cref="LobbyRebasing"/>; anything unrecognised falls back to <see cref="RebaseMode.Averaged"/>.
+    /// </summary>
+    public static RebaseMode ResolveRebaseMode() => LobbyRebasing.Value?.Trim().ToLowerInvariant() switch
+    {
+        "host" => RebaseMode.HostBased,
+        _ => RebaseMode.Averaged,
+    };
+
+    public static string RebaseModeName(RebaseMode mode) => mode switch
+    {
+        RebaseMode.HostBased => "host",
+        _ => "averaged",
+    };
 
     /// <summary>
     /// resolves the api key without ever logging it.

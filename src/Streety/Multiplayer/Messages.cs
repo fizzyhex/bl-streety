@@ -6,6 +6,8 @@ using LabFusion.SDK.Modules;
 using LabFusion.UI.Popups;
 using LabFusion.Utilities;
 
+using Streety.Geo;
+
 using UnityEngine;
 
 namespace Streety.Multiplayer;
@@ -27,6 +29,49 @@ internal sealed class LocationData : INetSerializable
     }
 }
 
+/// <summary>
+/// Contains the host's ECEF ground for a warp. The warp's coordinates are included so clients can ignore a ground
+/// that belongs to a different warp.
+/// </summary>
+internal sealed class GroundData : INetSerializable
+{
+    public double Latitude;
+    public double Longitude;
+    public double X;
+    public double Y;
+    public double Z;
+
+    public void Serialize(INetSerializer serializer)
+    {
+        serializer.SerializeValue(ref Latitude);
+        serializer.SerializeValue(ref Longitude);
+        serializer.SerializeValue(ref X);
+        serializer.SerializeValue(ref Y);
+        serializer.SerializeValue(ref Z);
+    }
+}
+
+/// <summary>
+/// Contains the host's current origin for a warp, tagged with the warp's coordinates like <see cref="GroundData"/>.
+/// </summary>
+internal sealed class OriginData : INetSerializable
+{
+    public double Latitude;
+    public double Longitude;
+    public double OriginLatitude;
+    public double OriginLongitude;
+    public double OriginHeight;
+
+    public void Serialize(INetSerializer serializer)
+    {
+        serializer.SerializeValue(ref Latitude);
+        serializer.SerializeValue(ref Longitude);
+        serializer.SerializeValue(ref OriginLatitude);
+        serializer.SerializeValue(ref OriginLongitude);
+        serializer.SerializeValue(ref OriginHeight);
+    }
+}
+
 internal sealed class TravelRequestData : INetSerializable
 {
     public string Query;
@@ -38,8 +83,8 @@ internal sealed class TravelRequestData : INetSerializable
 }
 
 /// <summary>
-/// Sends travel requests from clients to the host. The host is notified and can accept the request.
-/// Clients at or above the host's travel permission bypass the prompt and travel immediately.
+/// Sends travel requests from clients to the host.
+/// Clients at/above the host's travel permission bypass the prompt.
 /// </summary>
 internal sealed class TravelRequestMessage : ModuleMessageHandler
 {
@@ -109,7 +154,7 @@ internal sealed class TravelRequestMessage : ModuleMessageHandler
 }
 
 /// <summary>
-/// Handles streety messages for the lobby.
+/// Handles location messages for the lobby.
 /// </summary>
 [Net.DelayWhileLoading]
 internal sealed class LocationSetMessage : ModuleMessageHandler
@@ -128,5 +173,54 @@ internal sealed class LocationSetMessage : ModuleMessageHandler
         }
 
         session.WarpToResolved(data.Latitude, data.Longitude, data.Name);
+    }
+}
+
+
+/// <summary>
+/// Handles the host's ground for the lobby, so clients centre their origin where the host's is.
+/// </summary>
+[Net.DelayWhileLoading]
+internal sealed class GroundSetMessage : ModuleMessageHandler
+{
+    public override ExpectedReceiverType ExpectedReceiver => ExpectedReceiverType.ClientsOnly;
+
+    protected override void OnHandleMessage(ReceivedMessage received)
+    {
+        var data = received.ReadData<GroundData>();
+        var ground = new Double3(data.X, data.Y, data.Z);
+        var session = StreetyMod.Session;
+
+        if (session == null)
+        {
+            FusionBridge.StashGround(data.Latitude, data.Longitude, ground);
+            return;
+        }
+
+        session.ReceiveGround(data.Latitude, data.Longitude, ground);
+    }
+}
+
+/// <summary>
+/// Handles the host's origin after a warp or rebase, so every peer keeps the same Unity space.
+/// </summary>
+[Net.DelayWhileLoading]
+internal sealed class OriginSetMessage : ModuleMessageHandler
+{
+    public override ExpectedReceiverType ExpectedReceiver => ExpectedReceiverType.ClientsOnly;
+
+    protected override void OnHandleMessage(ReceivedMessage received)
+    {
+        var data = received.ReadData<OriginData>();
+        var origin = new GeoOrigin(data.OriginLatitude, data.OriginLongitude, data.OriginHeight);
+        var session = StreetyMod.Session;
+
+        if (session == null)
+        {
+            FusionBridge.StashOrigin(data.Latitude, data.Longitude, origin);
+            return;
+        }
+
+        session.ReceiveOrigin(data.Latitude, data.Longitude, origin);
     }
 }

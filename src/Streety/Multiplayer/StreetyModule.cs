@@ -20,6 +20,8 @@ internal sealed class StreetyModule : Module
     {
         ModuleMessageManager.RegisterHandler<TravelRequestMessage>();
         ModuleMessageManager.RegisterHandler<LocationSetMessage>();
+        ModuleMessageManager.RegisterHandler<GroundSetMessage>();
+        ModuleMessageManager.RegisterHandler<OriginSetMessage>();
 
         MultiplayerHooking.OnPlayerJoined += FusionApi.OnPlayerJoined;
     }

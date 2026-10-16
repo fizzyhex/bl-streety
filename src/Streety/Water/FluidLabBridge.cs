@@ -6,7 +6,7 @@ namespace Streety.Water;
 
 /// <summary>
 /// optional hook into lakatrazz's fluidlab (https://github.com/Lakatrazz/FluidLab) for swimming and buoyancy.
-/// found by reflection so streety builds and runs without it.
+/// (mod can run without it installed, hence the reflection route).
 /// </summary>
 public static class FluidLabBridge
 {
@@ -41,7 +41,7 @@ public static class FluidLabBridge
         if (_liquidVolume == null)
             return;
 
-        // fluidlab's own LiquidCreator uses the generic AddComponent; that's what wires up its injected fields
+        // fluidlab's own LiquidCreator uses the generic AddComponent
         _addComponent = typeof(GameObject).GetMethods()
             .First(m => m.Name == nameof(GameObject.AddComponent) && m.IsGenericMethodDefinition && m.GetParameters().Length == 0)
             .MakeGenericMethod(_liquidVolume);

@@ -36,6 +36,10 @@ public sealed class StreetySession : IDisposable
     // how long a joining client waits to be told where the lobby is before it falls back to the default start
     private const float HostWaitSeconds = 20f;
 
+    // how long into a warp a client waits for the host's ground before centring on its own probe. longer than
+    // WarpTimeout, so a host that arrives via the timeout still gets there first.
+    private const float HostGroundSeconds = WarpTimeout + 15f;
+
     private const float PerchDistance = 80f;
     private const float PerchHeight = 12f;
     private const float PerchFootprint = 12f;
@@ -45,7 +49,7 @@ public sealed class StreetySession : IDisposable
     private const float LeaveSeconds = 0.25f;
     private const float ArriveGraceSeconds = 1f;
 
-    private const string KeyRejectedStatus = "maps key rejected! check it has the map tiles api enabled, or focus BONELAB and paste mapskey:<key>";
+    private const string KeyRejectedStatus = "maps key rejected! check it has the map tiles api enabled.";
     private static readonly List<Viewer> NoViewers = new();
 
     private readonly GameObject _root;
@@ -72,15 +76,14 @@ public sealed class StreetySession : IDisposable
     private readonly List<Vector3> _rigs = new();
 
     private WarpPhase _warp;
-    private string _warpName;
-    private double _warpLat, _warpLon;
+    private WarpTarget _target;
     private Task<GeocodeResult> _geocodeTask;
     private float _warpStarted;
     private GameObject _platform;
     private Vector3? _probeHit;
     private float _probeStableSince;
     private bool _pendingStart;
-    private (double Latitude, double Longitude, string Name)? _startOverride;
+    private WarpTarget _startOverride;
     private float? _hostWaitSince;
     private bool _arrived;
     private float _arrivedAt;
@@ -115,15 +118,9 @@ public sealed class StreetySession : IDisposable
     public Vector3? PlatformSurface => _hasPlatform ? _streamer.Origin.EcefToUnity(_platformEcef) : null;
 
     /// <summary>
-    /// Whether a warp target has been set and can be sent to late joiners.
+    /// The current warp's destination and, once arrived, its ground; null before the first warp. Sent to late joiners.
     /// </summary>
-    public bool HasTarget => _warpName != null;
-
-    public double TargetLatitude => _warpLat;
-
-    public double TargetLongitude => _warpLon;
-
-    public string TargetName => _warpName;
+    public WarpTarget Target => _target;
 
     public NimbusBoost Nimbus => _nimbus;
 
@@ -163,7 +160,7 @@ public sealed class StreetySession : IDisposable
         }
         else if (Prefs.Water.Value)
         {
-            StreetyMod.Log.Msg("fluidlab isn't installed; water stays solid");
+            StreetyMod.Log.Msg("fluidlab isn't installed; water will not be swimmable");
         }
 
         if (Prefs.NavMesh.Value)
@@ -183,8 +180,7 @@ public sealed class StreetySession : IDisposable
         _pendingStart = true;
 
         // If sent before the session begun, pop the pending level request from the host
-        if (FusionBridge.TakePending(out var lat, out var lon, out var name))
-            _startOverride = (lat, lon, name);
+        _startOverride = FusionBridge.TakePending();
     }
 
     /// <summary>
@@ -245,21 +241,60 @@ public sealed class StreetySession : IDisposable
         if (_streamer == null)
             return;
 
+        var target = new WarpTarget(latitude, longitude, name);
+
         // still waiting on the first warp: this is the start
         if (_pendingStart)
         {
-            _startOverride = (latitude, longitude, name);
+            _startOverride = target;
             return;
         }
 
-        BeginWarp(latitude, longitude, name, false);
+        BeginWarp(target, false);
     }
 
-    private void BeginWarp(double latitude, double longitude, string name, bool announce = true)
+    /// <summary>
+    /// Records the host's ground for a warp. Ignored when it belongs to a different warp than the one in progress or
+    /// queued to start.
+    /// </summary>
+    public void ReceiveGround(double latitude, double longitude, Double3 ground)
     {
-        _warpLat = latitude;
-        _warpLon = longitude;
-        _warpName = name;
+        var target = _pendingStart ? _startOverride : _target;
+
+        if (target == null || !target.Matches(latitude, longitude))
+            return;
+
+        // Already landed on our own probe after giving up on the host. The origin the host sends alongside this
+        // rebases us onto the shared one, so the ground itself isn't needed any more.
+        if (!_pendingStart && _warp != WarpPhase.Streaming)
+        {
+            StreetyMod.Log.Warning("the host's ground arrived after we'd landed; following its origin instead");
+            return;
+        }
+
+        target.Ground = ground;
+    }
+
+    /// <summary>
+    /// Follows the host's origin for a warp. Before arrival it's kept for <see cref="FinishWarp"/>; after arrival the
+    /// world is rebased onto it straight away. Ignored when it belongs to a different warp.
+    /// </summary>
+    public void ReceiveOrigin(double latitude, double longitude, GeoOrigin origin)
+    {
+        var target = _pendingStart ? _startOverride : _target;
+
+        if (target == null || !target.Matches(latitude, longitude))
+            return;
+
+        target.Origin = origin;
+
+        if (!_pendingStart && _arrived && _warp == WarpPhase.None)
+            ApplyOrigin(origin);
+    }
+
+    private void BeginWarp(WarpTarget target, bool announce = true)
+    {
+        _target = target;
         _warp = WarpPhase.Streaming;
         _warpStarted = Time.time;
         _probeHit = null;
@@ -271,19 +306,19 @@ public sealed class StreetySession : IDisposable
         _streamer.UnloadAll();
         _navMesh?.Reset();
         _ground.Reset();
-        _streamer.SetOrigin(new GeoOrigin(latitude, longitude, 0));
+        _streamer.SetOrigin(new GeoOrigin(target.Latitude, target.Longitude, 0));
 
         CreatePlatform(new Vector3(0, WaitHeight, 0));
         PlacePlatform(new Vector3(0, WaitHeight, 0));
         if (Player.RigManager != null)
             RigTeleport.To(Player.RigManager, new Vector3(0, WaitHeight + 0.1f, 0));
 
-        Status = $"loading tiles for {name}…";
-        StreetyMod.Log.Msg($"warping to {name} {_streamer.Origin}");
+        Status = $"loading tiles for {target.Name}…";
+        StreetyMod.Log.Msg($"warping to {target.Name} {_streamer.Origin}");
 
         // existing players follow immediately while their surrounding tiles stream in.
         if (announce)
-            FusionBridge.Announce(latitude, longitude, name);
+            FusionBridge.Announce(target.Latitude, target.Longitude, target.Name);
     }
 
     public void Update()
@@ -295,8 +330,7 @@ public sealed class StreetySession : IDisposable
 
         if (_pendingStart)
         {
-            // Do not move players to the wait platform until the tile set is available. An invalid key leaves
-            // them at their level spawn positions.
+            // Do not move players to the wait platform until the tile set is available.
             if (!_streamer.HasRoot)
             {
                 _streamer.Update(NoViewers, null);
@@ -330,10 +364,12 @@ public sealed class StreetySession : IDisposable
             _pendingStart = false;
             UseRenderAssets();
 
-            if (_startOverride is var (lat, lon, name))
-                BeginWarp(lat, lon, name, false);
+            if (_startOverride != null)
+                BeginWarp(_startOverride, false);
             else
-                BeginWarp(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, Prefs.StartName.Value);
+                BeginWarp(new WarpTarget(Prefs.StartLatitude.Value, Prefs.StartLongitude.Value, Prefs.StartName.Value));
+
+            _startOverride = null;
         }
 
         var camera = FindCamera();
@@ -443,7 +479,7 @@ public sealed class StreetySession : IDisposable
         }
 
         var result = task.Result;
-        BeginWarp(result.Latitude, result.Longitude, result.Name);
+        BeginWarp(new WarpTarget(result.Latitude, result.Longitude, result.Name));
     }
 
     private void CollectViewers()
@@ -504,32 +540,61 @@ public sealed class StreetySession : IDisposable
 
         if (settled || (_probeHit.HasValue && elapsed > WarpTimeout))
         {
-            FinishWarp(_probeHit.Value);
+            if (_target.Ground is { } hostGround)
+            {
+                FinishWarp(hostGround);
+                return;
+            }
+
+            // Clients centre on the host's ground so Unity positions mean the same place on every peer.
+            if (!FusionBridge.IsClient || elapsed > HostGroundSeconds)
+            {
+                if (FusionBridge.IsClient)
+                    StreetyMod.Log.Warning("the host didn't share its ground; using our own");
+
+                FinishWarp(_streamer.Origin.UnityToEcef(_probeHit.Value));
+                return;
+            }
+
+            Status = $"waiting for the host to reach {_target.Name}...";
             return;
         }
 
         if (elapsed > WarpTimeout * 2)
         {
             _warp = WarpPhase.None;
-            Status = $"couldn't find the ground at {_warpName}";
+            Status = $"couldn't find the ground at {_target.Name}";
             StreetyMod.Log.Warning(Status);
             return;
         }
 
         Status = _probeHit.HasValue
-            ? $"refining {_warpName}… ({_streamer.InFlightCount} loading)"
-            : $"loading tiles for {_warpName}… ({_streamer.InFlightCount} loading)";
+            ? $"downloading {_target.Name}... ({_streamer.InFlightCount} loading)"
+            : $"loading tiles for {_target.Name}... ({_streamer.InFlightCount} loading)";
     }
 
-    private void FinishWarp(Vector3 ground)
+    /// <summary>
+    /// Centres the origin on <paramref name="groundEcef"/> and moves the local player to a perch beside it. In a
+    /// lobby, the host's ground is shared so every peer ends up with the same origin.
+    /// </summary>
+    private void FinishWarp(Double3 groundEcef)
     {
         // Select the perch while the colliders are still in the positions used by the probe.
-        var perchEcef = _streamer.Origin.UnityToEcef(FindPerch(ground));
+        var perchEcef = _streamer.Origin.UnityToEcef(FindPerch(_streamer.Origin.EcefToUnity(groundEcef)));
 
-        // Recenter vertically so the ground remains near y = 0, where floating-point precision is highest.
-        var groundEcef = _streamer.Origin.UnityToEcef(ground);
+        // Recenter vertically so the ground remains near y = 0, where floating-point precision is highest. A client
+        // that heard the host rebase before it arrived uses the host's origin instead.
         var (lat, lon, height) = Wgs84.EcefToGeodetic(groundEcef);
-        _streamer.SetOrigin(new GeoOrigin(lat, lon, height));
+        var origin = FusionBridge.IsClient && _target.Origin != null
+            ? _target.Origin
+            : new GeoOrigin(lat, lon, height);
+
+        _streamer.SetOrigin(origin);
+
+        _target.Ground = groundEcef;
+        _target.Origin = origin;
+        FusionBridge.AnnounceGround(_target);
+        FusionBridge.AnnounceOrigin(_target);
 
         var perch = _streamer.Origin.EcefToUnity(perchEcef);
         PlacePlatform(perch);
@@ -538,20 +603,20 @@ public sealed class StreetySession : IDisposable
             RigTeleport.To(Player.RigManager, perch + new Vector3(0, 0.05f, 0));
         DestroyPlatform();
 
-        _pin.Show(_warpName, groundEcef);
+        _pin.Show(_target.Name, groundEcef);
 
         _warp = WarpPhase.None;
         _arrived = true;
         _arrivedAt = Time.time;
         _perched = true;
-        LocationName = _warpName;
-        Status = $"at {_warpName}";
-        StreetyMod.Log.Msg($"arrived at {_warpName} ({lat:F6}, {lon:F6}, {height:F1}m)");
+        LocationName = _target.Name;
+        Status = $"currently at {_target.Name}";
+        StreetyMod.Log.Msg($"arrived at {_target.Name} ({lat:F6}, {lon:F6}, {height:F1}m)");
     }
 
     /// <summary>
     /// Finds a position beside <paramref name="target"/> with the lowest surrounding obstruction, raised clear of
-    /// the ground and roofs and never below the target's own ground.
+    /// the ground and roofs and above the level geo.
     /// </summary>
     private Vector3 FindPerch(Vector3 target)
     {
@@ -630,29 +695,82 @@ public sealed class StreetySession : IDisposable
     }
 
     /// <summary>
-    /// Recenters the Unity origin when the local player moves too far away to preserve floating-point precision.
+    /// Recenters the Unity origin when players move too far away to preserve floating-point precision. In a lobby
+    /// only the host decides, using <see cref="Prefs.LobbyRebasing"/>, and clients follow via
+    /// <see cref="ReceiveOrigin"/>.
     /// </summary>
     private void UpdateRebase()
     {
-        var rig = Player.RigManager;
-        var feet = rig?.physicsRig?.feet;
-
-        if (feet == null)
+        if (!Prefs.Rebasing.Value || FusionBridge.IsClient)
             return;
 
-        var position = feet.transform.position;
-        var limit = Prefs.RebaseDistance.Value;
-
-        if (position.x * position.x + position.z * position.z < limit * limit)
+        if (PickRebaseCentre() is not { } centre)
             return;
 
         var old = _streamer.Origin;
-        var feetEcef = old.UnityToEcef(position);
-        var (lat, lon, _) = Wgs84.EcefToGeodetic(feetEcef);
+        var (lat, lon, _) = Wgs84.EcefToGeodetic(old.UnityToEcef(centre));
         var origin = new GeoOrigin(lat, lon, old.Height);
 
+        ApplyOrigin(origin);
+
+        if (_target != null)
+        {
+            _target.Origin = origin;
+            FusionBridge.AnnounceOrigin(_target);
+        }
+    }
+
+    /// <summary>
+    /// Picks the Unity-space point to recentre on, or null when nothing has strayed past the rebase radius. Outside a
+    /// lobby this is always the local rig.
+    /// </summary>
+    private Vector3? PickRebaseCentre()
+    {
+        var limit = Prefs.RebaseDistance.Value;
+        var mode = FusionBridge.IsHost ? Prefs.ResolveRebaseMode() : RebaseMode.HostBased;
+
+        switch (mode)
+        {
+            case RebaseMode.Averaged:
+                if (_rigs.Count == 0)
+                    return null;
+
+                var sum = Vector3.zero;
+
+                foreach (var rig in _rigs)
+                    sum += rig;
+
+                var mean = sum / _rigs.Count;
+                return Beyond(mean, limit) ? mean : null;
+
+            default:
+                var feet = Player.RigManager?.physicsRig?.feet;
+
+                if (feet == null)
+                    return null;
+
+                var position = feet.transform.position;
+                return Beyond(position, limit) ? position : null;
+        }
+    }
+
+    private static bool Beyond(Vector3 position, float limit) =>
+        position.x * position.x + position.z * position.z >= limit * limit;
+
+    /// <summary>
+    /// Switches to <paramref name="origin"/> and moves the local rig so it stays at the same place on the globe.
+    /// Remote rigs catch up with their owners' next position update.
+    /// </summary>
+    private void ApplyOrigin(GeoOrigin origin)
+    {
+        var rig = Player.RigManager;
+        var feet = rig?.physicsRig?.feet;
+        Double3? feetEcef = feet != null ? _streamer.Origin.UnityToEcef(feet.transform.position) : null;
+
         _streamer.SetOrigin(origin);
-        RigTeleport.To(rig, origin.EcefToUnity(feetEcef), false);
+
+        if (feetEcef.HasValue)
+            RigTeleport.To(rig, origin.EcefToUnity(feetEcef.Value), false);
 
         StreetyMod.Log.Msg($"rebased origin to {origin}");
     }
